@@ -1,6 +1,6 @@
 const id = '\\d+';
 const rules = [
-  ['GET', '/users/@me'], ['GET', '/users/@me/guilds', ['limit','before','after']],
+  ['GET', '/users/@me'], ['POST', '/users/@me/channels'], ['GET', '/users/@me/guilds', ['limit','before','after']],
   ['GET PATCH', `/guilds/${id}`], ['GET POST', `/guilds/${id}/channels`],
   ['GET POST PATCH', `/guilds/${id}/roles`], ['PATCH DELETE', `/guilds/${id}/roles/${id}`],
   ['GET', `/guilds/${id}/members`, ['limit','after']],

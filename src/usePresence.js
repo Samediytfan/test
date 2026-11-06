@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-export default function usePresence(token, enabled) {
+import { useEffect, useState, useRef } from 'react';
+export default function usePresence(token, enabled, guildId, memberIds=[]) {
+ const socketRef=useRef(null);
  const [state,setState]=useState({members:{},message:''});
  useEffect(()=>{
   setState({members:{},message:''});if(!token||!enabled)return;
@@ -8,7 +9,7 @@ export default function usePresence(token, enabled) {
   const connect=()=>{
    if(stopped)return;
    setState({members:{},message:'Connecting live status…'});
-   socket=new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
+   socket=socketRef.current=new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
    const send=(op,d)=>{if(socket.readyState===1)socket.send(JSON.stringify({op,d}))};
    const beat=interval=>{if(!ack){socket.close(4000,'Heartbeat timeout');return}ack=false;send(1,seq);heartbeat=setTimeout(()=>beat(interval),interval)};
    socket.onmessage=event=>{
@@ -19,9 +20,9 @@ export default function usePresence(token, enabled) {
     if(packet.op===1)send(1,seq);
     if(packet.op===7||packet.op===9)socket.close(4000,'Reconnect requested');
     if(packet.t==='READY')setState({members:{},message:'Live status connected'});
-    if(packet.t==='GUILD_CREATE'||packet.t==='PRESENCE_UPDATE'){
+    if(packet.t==='GUILD_CREATE'||packet.t==='GUILD_MEMBERS_CHUNK'||packet.t==='PRESENCE_UPDATE'){
      const guildId=packet.t==='GUILD_CREATE'?packet.d.id:packet.d.guild_id;
-     const updates=packet.t==='GUILD_CREATE'?packet.d.presences||[]:[packet.d];
+     const updates=packet.t==='PRESENCE_UPDATE'?[packet.d]:packet.d.presences||[];
      setState(old=>{const members={...old.members};for(const p of updates)if(p.user?.id&&['online','idle','dnd','offline'].includes(p.status))members[`${guildId}:${p.user.id}`]=p.status;return {...old,members}});
     }
    };
@@ -34,5 +35,7 @@ export default function usePresence(token, enabled) {
   };
   connect();return()=>{stopped=true;clear();socket?.close(1000,'Status disabled')};
  },[token,enabled]);
+ const idsKey=memberIds.join(',');
+ useEffect(()=>{if(!enabled||!guildId||state.message!=='Live status connected')return;const ids=idsKey.split(',').filter(id=>/^\d+$/.test(id));const timers=[];for(let i=0;i<ids.length;i+=100)timers.push(setTimeout(()=>{if(socketRef.current?.readyState===1)socketRef.current.send(JSON.stringify({op:8,d:{guild_id:guildId,user_ids:ids.slice(i,i+100),presences:true}}))},i*10));return()=>timers.forEach(clearTimeout)},[enabled,guildId,idsKey,state.message]);
  return state;
 }

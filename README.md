@@ -34,7 +34,15 @@ Select **Connect your bot**, enter your bot token, and choose a server and chann
 
 Use the emoji button to search standard Unicode emoji and choose skin tones. Type `@` for member/role suggestions; selected mentions appear as readable names and send Discord mention IDs. Existing role edits save automatically after a short pause; new roles use Create role. Failed saves show an error and a retry action.
 
-To see live member status, enable **Presence Intent** for your bot in the Discord Developer Portal, then choose **Enable live status** in the website's server menu. This opens a Discord Gateway connection for the current browser session. Missing or disconnected presence data is shown as unknown; invisible users cannot be distinguished from offline users. Disable the connection using the same menu. Large bots that require sharding are not supported by this browser connection.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:264c93ace0d2b28ead49cf592ae443949b73605bda5a069666214308251cbec1 -->
+
+Enable **Presence Intent** for your bot in the Discord Developer Portal. Live status starts automatically when you connect, and requests presence for the loaded server members. Missing or disconnected status is shown as unknown with a dashed indicator; invisible users cannot be distinguished from offline users. Disconnect or reconnect live status from the server menu. Large bots that require sharding are not supported by this browser connection.
+
+Click a member, then **Profile / DM / Timeout** to send a direct message as your bot, choose a timeout duration from 1 second to 28 days, or remove a timeout. Discord enforces role hierarchy and moderation permissions; privacy settings can block DMs. Mention chips can be removed with Backspace or Delete.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Native slash commands still require execution in Discord, or a separately implemented integration with the bot's own source/API. Prefix shortcuts send plain messages; the receiving bot must accept bot-authored messages.
 
