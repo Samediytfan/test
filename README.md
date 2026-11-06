@@ -40,7 +40,17 @@ Use the emoji button to search standard Unicode emoji and choose skin tones. Typ
 
 Enable **Presence Intent** for your bot in the Discord Developer Portal. Live status starts automatically when you connect, and requests presence for the loaded server members. Missing or disconnected status is shown as unknown with a dashed indicator; invisible users cannot be distinguished from offline users. Disconnect or reconnect live status from the server menu. Large bots that require sharding are not supported by this browser connection.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4b5855fc114419f87526bb610b94cc9bc1261f52eeb9b59fdfb662def64a90f1 -->
+
 Click a member, then **Profile / DM / Timeout** to send a direct message as your bot, choose a timeout duration from 1 second to 28 days, or remove a timeout. Discord enforces role hierarchy and moderation permissions; privacy settings can block DMs. Mention chips can be removed with Backspace or Delete.
+
+Click the Discord icon at the top left to open **Direct Messages**. Conversations appear after you open a DM from a member profile or receive a new DM while connected. Their IDs and names are saved separately for each bot in this browser; message contents and bot tokens are not saved there. Discord does not provide this bot dashboard with a complete list of older DM conversations, so open an older DM from that member's profile to add it.
+
+Red badges show new DMs and messages mentioning the connected bot, its roles, or everyone. They count events received while this page is connected, and clear when the relevant conversation or channel is viewed. They don't include messages missed while the page was closed, and aren't synced with Discord's read state. Enable the bot's Gateway connection to receive them; message content may require Discord's Message Content Intent. When Presence Intent is unavailable, message notifications reconnect without presence. Discord permissions, Gateway availability, and DM privacy settings still apply.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 -->
 
