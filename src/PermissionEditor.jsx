@@ -1,0 +1,6 @@
+import React, { useState } from 'react';
+import { PERMISSIONS, hasPermission, togglePermission, setOverwrite, permissionLabel } from './permissions.js';
+export default function PermissionEditor({ value='0', allow='0', deny='0', overwrite=false, onChange, disabled=false }) {
+  const [search,setSearch] = useState('');
+  return <div className="permission-editor"><input className="modal-input" aria-label="Filter permissions" placeholder="Find a permission…" value={search} onChange={e=>setSearch(e.target.value)}/><div className="permission-list">{PERMISSIONS.filter(p=>(!overwrite||p.channel)&&permissionLabel(p.name).toLowerCase().includes(search.toLowerCase())).map(p=><div className="permission-row" key={p.bit}><span>{permissionLabel(p.name)}</span>{overwrite?<select aria-label={permissionLabel(p.name)} disabled={disabled} value={hasPermission(allow,p.bit)?'allow':hasPermission(deny,p.bit)?'deny':'inherit'} onChange={e=>onChange(setOverwrite(allow,deny,p.bit,e.target.value))}><option value="deny">Deny</option><option value="inherit">Inherit</option><option value="allow">Allow</option></select>:<input aria-label={permissionLabel(p.name)} type="checkbox" disabled={disabled} checked={hasPermission(value,p.bit)} onChange={e=>onChange(togglePermission(value,p.bit,e.target.checked))}/>}</div>)}</div></div>;
+}
