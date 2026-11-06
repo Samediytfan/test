@@ -24,8 +24,8 @@ export function createDiscordBudgets({ now = Date.now } = {}) {
   const key = token => createHash('sha256').update(token.trim().replace(/^Bot\s+/i, '')).digest('hex');
   const prune = () => { for (const [id, expires] of verified) { if (expires > now()) break; verified.delete(id); } };
   const markVerified = token => { prune(); const id = key(token); if (!verified.has(id) && verified.size < 1000) verified.set(id, now() + ttl); };
-  const route = (knownLimit, unknownLimit) => {
-    const known = createRequestLimiter({ globalLimit: knownLimit, now });
+  const route = (knownLimit, unknownLimit, clientLimit = 120) => {
+    const known = createRequestLimiter({ clientLimit, globalLimit: knownLimit, now });
     const unknown = createRequestLimiter({ clientLimit: 10, globalLimit: unknownLimit, now });
     return (req, res, next) => {
       prune();
@@ -35,6 +35,6 @@ export function createDiscordBudgets({ now = Date.now } = {}) {
     };
   };
   // Fixed aggregate ceilings sum to 600/minute, independent of client rotation.
-  return { proxy: route(450, 30), connect: route(90, 30), markVerified, invalidate: token => verified.delete(key(token)) };
+  return { proxy: route(450, 30), connect: route(90, 30, 10), markVerified, invalidate: token => verified.delete(key(token)) };
 }
 export const discordBudgets = createDiscordBudgets();

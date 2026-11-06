@@ -26,7 +26,7 @@ function decrypt(envelope, password) {
   return bots;
 }
 
-export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, connectLimit = discordBudgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
+export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, budgets = discordBudgets, connectLimit = budgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   const enabled = typeof password === 'string' && password.length >= 16;
@@ -64,12 +64,12 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     try {
       const headers = { Authorization: `Bot ${token}` };
       const response = await fetchImpl('https://discord.com/api/v10/users/@me', { headers, signal: AbortSignal.timeout(15000) });
-      if (response.status === 401) discordBudgets.invalidate(token);
+      if (response.status === 401) budgets.invalidate(token);
       if (!response.ok) return res.status(401).json({ message: 'Discord could not verify this bot token.' });
       user = await response.json();
       if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return res.status(400).json({ message: 'Only bot accounts can be connected.' });
-      discordBudgets.markVerified(token);
       const guildResponse = await fetchImpl('https://discord.com/api/v10/users/@me/guilds', { headers, signal: AbortSignal.timeout(15000) });
+      if (guildResponse.status === 401) budgets.invalidate(token);
       if (!guildResponse.ok) return res.status(502).json({ message: 'Discord could not load the bot’s servers. Please try again.' });
       guilds = await guildResponse.json();
       if (!Array.isArray(guilds)) throw new Error('Invalid Discord response');
@@ -82,6 +82,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       const rest = bots.filter(b => b.id !== user.id);
       if (rest.length >= 100) return response.status(409).json({ message: 'The site vault is full. Ask the site owner to remove a saved bot.' });
       await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);
+      budgets.markVerified(token);
       response.json({ user, guilds });
     })(req, res);
     });

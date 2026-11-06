@@ -4,6 +4,7 @@ import express from 'express';
 import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createDiscordBudgets } from '../request-limits.js';
 import { createVaultRouter } from '../vault.js';
 
 const connectCode = 'synthetic-owner-invite-code';
@@ -13,7 +14,7 @@ async function fixture(t, options = {}) {
   const filePath = join(dir, 'secret', 'bots.enc.json');
   const app = express(); app.set('trust proxy', 'loopback'); app.use(express.json());
   let calls = 0;
-  app.use('/api/vault', createVaultRouter({ password, connectCode, filePath, fetchImpl: async (_url, init) => {
+  app.use('/api/vault', createVaultRouter({ password, connectCode, filePath, budgets: createDiscordBudgets(), fetchImpl: async (_url, init) => {
     assert.ok(init.headers.Authorization.startsWith('Bot '));
     return { ok: true, json: async () => ({ id: String(++calls), username: `Synthetic bot ${calls}`, bot: true }) };
   }, ...options }));
@@ -177,4 +178,29 @@ test('vault attempt capacity fails closed without evicting active lockouts',asyn
  assert.equal((await request('', 'GET',undefined,password,'192.0.2.1')).status,429);
  assert.equal((await request('', 'GET',undefined,password,'192.0.2.2')).status,200);
  time=60000;assert.equal((await request('', 'GET',undefined,password,'192.0.2.3')).status,200);
+});
+
+
+test('guild lookup 401 invalidates existing trust without changing its error response',async t=>{
+ const budgets=createDiscordBudgets();const token='synthetic-guild-revoked';budgets.markVerified(token);
+ const {request}=await fixture(t,{budgets,fetchImpl:async url=>url.endsWith('/guilds')?{ok:false,status:401}:{ok:true,json:async()=>({id:'8',username:'Synthetic',bot:true})}});
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,502);
+ let admitted=0;const res={set(){},status(){return this},json(){}};
+ for(let i=0;i<11;i++)budgets.proxy({ip:'probe',body:{token}},res,()=>{admitted++});
+ assert.equal(admitted,10,'revoked token must use unverified budget');
+});
+
+test('rejected admission never grants trust; admitted connections enforce trusted client limits',async t=>{
+ const budgets=createDiscordBudgets();const token='synthetic-admission-budget';let calls=0;
+ const {request,filePath}=await fixture(t,{budgets,fetchImpl:async url=>{calls++;return {ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'8',username:'Synthetic',bot:true}}}});
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true,connectCode:''},'')).status,403);
+ await assert.rejects(readFile(filePath),{code:'ENOENT'});
+ let admitted=0;const res={set(){},status(){return this},json(){}};
+ for(let i=0;i<11;i++)budgets.proxy({ip:'probe',body:{token}},res,()=>{admitted++});
+ assert.equal(admitted,10,'rejected admission must not grant trusted budget');
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,200);
+ for(let i=0;i<10;i++)assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
+ const before=calls;
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,429);assert.equal(calls,before,'limited requests must not reach Discord');
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'','192.0.2.2')).status,200);
 });

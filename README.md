@@ -94,7 +94,13 @@ The vault holds up to 100 bots; an unavailable vault prevents connection, while 
 
 <!-- coderabbit-ai-generated-section:v1:6f5b448e052bc50d3b24b4842ceb301e9aa32fd3732fd844cf9f5f3b15896070 -->
 
-Discord-bound requests have separate proxy and connection budgets with aggregate ceilings totaling 600 requests/minute. Previously verified tokens receive reserved capacity (450 proxy and 90 connection requests/minute); unverified tokens receive 30/minute per route and 10/minute per client. Malformed requests are rejected before accounting. Verification is cached in memory for up to one hour and removed on a Discord 401. Client rotation cannot bypass aggregate ceilings.
+Discord-bound requests have separate proxy and connection budgets with aggregate ceilings totaling 600 requests/minute. Previously verified tokens receive reserved capacity (450 proxy and 90 connection requests/minute); <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a946cec8d23e7c640ecc7de861452123151fa8de857a4e782b8681e25d36217b -->
+
+unverified tokens receive 30/minute per route and 10/minute per client. Trusted connection requests are also limited to 10/minute per client. A successful connection grants trusted status only after admission and encrypted storage succeed; a 401 during either identity or server-list verification removes that status.
+
+<!-- /coderabbit-ai-generated:v1 --> Malformed requests are rejected before accounting. Verification is cached in memory for up to one hour and removed on a Discord 401. Client rotation cannot bypass aggregate ceilings.
 
 <!-- /coderabbit-ai-generated:v1 --> Vault passwords allow 10 failed guesses per client per minute; every further guess is blocked until the window resets. The Blueprint sets `TRUST_PROXY_HOPS=1` for Render’s inbound proxy. Enable this setting only when the app is accessible through one trusted proxy; other installations ignore forwarded IP headers by default.
 

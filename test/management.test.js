@@ -95,7 +95,7 @@ test('bot roles coalesce per guild, refresh, expire, recover after failure and i
  assert.deepEqual(await cache.get('g',async()=>({roles:['new-session']})),['new-session']);
  cache.clear();await assert.rejects(cache.get('g',async()=>{throw Error('unavailable')}));
  time+=10000;assert.deepEqual(await cache.get('g',async()=>({roles:['retry']})),['retry']);
- const pending=cache.get('other',load);await Promise.resolve();cache.update('other',['gateway']);resolve({roles:['stale']});await pending;
+ const pending=cache.get('other',load);await Promise.resolve();cache.update('other',['gateway']);resolve({roles:['stale']});assert.deepEqual(await pending,['gateway']);
  assert.deepEqual(await cache.get('other',load),['gateway']);
 });
 
