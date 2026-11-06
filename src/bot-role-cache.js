@@ -14,7 +14,12 @@ export function createBotRoleCache({ maxAge = 60000, failureBackoff = 10000, now
         if (current !== entry && current?.roles) return current.roles;
         if (current === entry) entries.set(guildId, { roles: member.roles || [], expires: now() + maxAge });
         return member.roles || [];
-      }, error => { if (entries.get(guildId) === entry) entries.set(guildId, { error, expires: now() + failureBackoff }); throw error; });
+      }, error => {
+        const current = entries.get(guildId);
+        if (current !== entry && current?.roles) return current.roles;
+        if (current === entry) entries.set(guildId, { error, expires: now() + failureBackoff });
+        throw error;
+      });
       entries.set(guildId, entry);
       return entry.promise;
     },

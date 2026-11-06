@@ -148,3 +148,17 @@ test('malformed proxy requests never consume Discord forwarding capacity',async(
  await proxy({body:{token:'synthetic',path:'/disallowed'}},res);assert.equal(admitted,0);
  await proxy({body:{token:'synthetic',path:'/users/@me'}},res);assert.equal(admitted,1);
 });
+
+
+test('role lookup rejection returns intervening Gateway roles to all pending callers',async()=>{
+ const {createBotRoleCache}=await import('../src/bot-role-cache.js');
+ for(const roles of [['gateway'],[]]){
+  const cache=createBotRoleCache();let reject,calls=0;
+  const load=()=>{calls++;return new Promise((_,fail)=>{reject=fail})};
+  const first=cache.get('guild',load),second=cache.get('guild',load);
+  await Promise.resolve();assert.equal(calls,1);
+  cache.update('guild',roles);reject(Error('stale request failed'));
+  assert.deepEqual(await first,roles);assert.deepEqual(await second,roles);
+  assert.deepEqual(await cache.get('guild',load),roles);assert.equal(calls,1);
+ }
+});
