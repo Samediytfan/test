@@ -1,6 +1,7 @@
+import { discordRequestLimit } from './request-limits.js';
 import { isAllowedDiscordRequest } from './discord-routes.js';
-export function createDiscordProxy(fetchImpl = fetch) {
- return async (req, res) => {
+export function createDiscordProxy(fetchImpl = fetch, limit = discordRequestLimit) {
+ return (req, res) => limit(req, res, async () => {
   const { path, method = 'GET', body, token } = req.body || {};
   if (typeof token !== 'string' || !token.trim() || !isAllowedDiscordRequest(path, method)) {
     return res.status(400).json({ message: 'Invalid Discord request.' });
@@ -20,5 +21,5 @@ export function createDiscordProxy(fetchImpl = fetch) {
   } catch {
     res.status(502).json({ message: 'Could not reach Discord. Please try again.' });
   }
- };
+ });
 }

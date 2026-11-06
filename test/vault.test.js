@@ -6,13 +6,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createVaultRouter } from '../vault.js';
 
+const connectCode = 'synthetic-owner-invite-code';
 const password = 'synthetic-test-password-only';
 async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'relay-vault-test-'));
   const filePath = join(dir, 'secret', 'bots.enc.json');
-  const app = express(); app.use(express.json());
+  const app = express(); app.set('trust proxy', 'loopback'); app.use(express.json());
   let calls = 0;
-  app.use('/api/vault', createVaultRouter({ password, filePath, fetchImpl: async (_url, init) => {
+  app.use('/api/vault', createVaultRouter({ password, connectCode, filePath, fetchImpl: async (_url, init) => {
     assert.ok(init.headers.Authorization.startsWith('Bot '));
     return { ok: true, json: async () => ({ id: String(++calls), username: `Synthetic bot ${calls}`, bot: true }) };
   }, ...options }));
@@ -20,8 +21,9 @@ async function fixture(t, options = {}) {
   await new Promise(resolve => server.once('listening', resolve));
   const url = `http://127.0.0.1:${server.address().port}/api/vault`;
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); });
-  const request = async (path = '', method = 'GET', body, auth = password) => {
-    const r = await fetch(url + path, { method, headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const request = async (path = '', method = 'GET', body, auth = password, client = '192.0.2.1') => {
+    if (path === '/connect' && body) body = { connectCode, ...body };
+    const r = await fetch(url + path, { method, headers: { 'X-Forwarded-For': client, Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { status: r.status, headers: r.headers, data: await r.json() };
   };
   return { request, filePath, url };
@@ -83,11 +85,12 @@ test('Discord verification failure and non-bot identities are never stored', asy
   assert.deepEqual((await human.request()).data, []);
 });
 
-test('failed authentication is throttled while the correct password remains usable', async t => {
+test('failed authentication blocks all guesses for that client without blocking others', async t => {
   const { request } = await fixture(t);
   for (let i=0;i<10;i++) assert.equal((await request('', 'GET', undefined, 'incorrect')).status, 401);
   assert.equal((await request('', 'GET', undefined, 'incorrect')).status, 429);
-  assert.equal((await request()).status, 200);
+  assert.equal((await request()).status, 429);
+  assert.equal((await request('', 'GET', undefined, password, '192.0.2.2')).status, 200);
 });
 
 test('saving the same bot updates its token without creating a duplicate', async t => {
@@ -140,7 +143,27 @@ test('full vault rejects new acknowledged connections without losing existing en
   assert.ok(saves.every(r=>r.status===201));
   assert.equal((await request('/connect','POST',{token:'synthetic-101',acknowledgeOwnerAccess:true},'')).status,409);
   assert.equal((await request()).data.length,100);
-  assert.equal((await request('/connect','POST',{token:'replacement-1',acknowledgeOwnerAccess:true},'')).status,200);
+  assert.equal((await request('/connect','POST',{token:'replacement-1',acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
   assert.equal((await request()).data.length,100);
   assert.equal((await request('/reveal','POST',{id:'1'})).data.token,'replacement-1');
+});
+
+
+test('new bots require owner admission and rejected writes preserve the encrypted file',async t=>{
+ const {request,filePath}=await fixture(t,{fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'8',username:'Synthetic',bot:true}})});
+ assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true,connectCode:''},'')).status,403);
+ await assert.rejects(readFile(filePath),{code:'ENOENT'});
+ assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,200);
+ const original=await readFile(filePath,'utf8');
+ assert.equal((await request('/connect','POST',{token:'updated',acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
+ assert.notEqual(await readFile(filePath,'utf8'),original);
+ assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'updated');
+});
+
+test('password guess windows reset before authentication',async t=>{
+ let time=1000; const {request}=await fixture(t,{now:()=>time});
+ for(let i=0;i<10;i++)assert.equal((await request('', 'GET', undefined, 'wrong')).status,401);
+ assert.equal((await request()).status,429);
+ time+=60000;
+ assert.equal((await request()).status,200);
 });

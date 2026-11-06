@@ -5,6 +5,8 @@ import { createVaultRouter } from './vault.js';
 import { createDiscordProxy } from './discord-proxy.js';
 
 const app = express();
+// Enable only behind the single trusted hosting proxy; ignore forwarded IPs otherwise.
+app.set('trust proxy', process.env.TRUST_PROXY_HOPS === '1' ? 1 : false);
 app.use(express.json({ limit: '1mb' }));
 app.use((error, _req, res, next) => {
   if (!error) return next();

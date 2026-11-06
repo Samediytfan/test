@@ -3,7 +3,10 @@ const serialize = node => node.nodeType === 3 ? node.textContent : node.dataset?
 export default forwardRef(function MentionInput({value,members,roles,onChange,onSelect,onKeyDown,disabled,...props},ref){
  const root=useRef(null);
  const offset=()=>{const selection=window.getSelection();if(!selection?.rangeCount||!root.current.contains(selection.anchorNode))return value.length;const range=selection.getRangeAt(0).cloneRange();range.selectNodeContents(root.current);range.setEnd(selection.focusNode,selection.focusOffset);return serialize(range.cloneContents()).length};
- useImperativeHandle(ref,()=>({focus:()=>root.current.focus(),get selectionStart(){return offset()},setSelectionRange:()=>{const range=document.createRange();range.selectNodeContents(root.current);range.collapse(false);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range)}}));
+ useImperativeHandle(ref,()=>({focus:()=>root.current.focus(),get selectionStart(){return offset()},setSelectionRange:(start,end=start)=>{
+   const locate=position=>{let remaining=position;for(const node of root.current.childNodes){const length=node.dataset?.mention?.length??node.textContent.length;if(remaining<=length){if(node.nodeType===3)return [node,remaining];const index=[...root.current.childNodes].indexOf(node);return [root.current,index+(remaining?1:0)]}remaining-=length}return [root.current,root.current.childNodes.length]};
+   const range=document.createRange();range.setStart(...locate(start));range.setEnd(...locate(end));const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range)
+  }}));
  useLayoutEffect(()=>{
   if(serialize(root.current)===value&&root.current.dataset.ready)return;
   root.current.replaceChildren();

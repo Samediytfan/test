@@ -1,3 +1,4 @@
+import { clientId, discordRequestLimit } from './request-limits.js';
 import { Router } from 'express';
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync, createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
@@ -25,11 +26,13 @@ function decrypt(envelope, password) {
   return bots;
 }
 
-export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch } = {}) {
+export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, connectLimit = discordRequestLimit, now = Date.now } = {}) {
   const router = Router();
+  router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   const enabled = typeof password === 'string' && password.length >= 16;
   const hash = value => createHash('sha256').update(value).digest();
-  let failures = 0, resetAt = 0, queue = Promise.resolve();
+  const attempts = new Map();
+  let queue = Promise.resolve();
   const read = async () => {
     try { return decrypt(JSON.parse(await readFile(filePath, 'utf8')), password); }
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
@@ -50,7 +53,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   };
   // The public connect operation only writes after a visitor has acknowledged the
   // owner-access notice. It never returns a token or permits reading the vault.
-  router.post('/connect', async (req, res) => {
+  router.post('/connect', connectLimit, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!enabled) return res.status(503).json({ message: 'The site vault is unavailable. Ask the site owner to configure it before connecting.' });
     if (req.body?.acknowledgeOwnerAccess !== true) return res.status(400).json({ message: 'Please acknowledge that the site owner can access your bot token.' });
@@ -72,6 +75,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     }
     return route(async (_req, response) => {
       const bots = await read();
+      if (!bots.some(b => b.id === user.id) && (typeof connectCode !== 'string' || connectCode.length < 16 || !timingSafeEqual(hash(String(req.body?.connectCode || '')), hash(connectCode)))) return response.status(403).json({ message: 'Ask the owner for a connection code to add a new bot.' });
       const rest = bots.filter(b => b.id !== user.id);
       if (rest.length >= 100) return response.status(409).json({ message: 'The site vault is full. Ask the site owner to remove a saved bot.' });
       await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);
@@ -81,10 +85,15 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
+    const time = now(), id = clientId(req);
+    for (const [key, entry] of attempts) if (time >= entry.resetAt) attempts.delete(key);
+    let entry = attempts.get(id);
+    if (!entry) { entry = { failures: 0, resetAt: time + 60000 }; attempts.set(id, entry); }
+    if (entry.failures >= 10) { res.set('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt-time)/1000)))); return res.status(429).json({ message: 'Too many failed attempts. Try again in a minute.' }); }
     const supplied = (req.get('Authorization') || '').replace(/^Bearer /, '');
     if (!timingSafeEqual(hash(supplied), hash(password))) {
-      if (Date.now() > resetAt) { failures = 0; resetAt = Date.now() + 60000; }
-      return res.status(++failures > 10 ? 429 : 401).json({ message: failures > 10 ? 'Too many failed attempts. Try again in a minute.' : 'Vault password is incorrect.' });
+      entry.failures++;
+      return res.status(401).json({ message: 'Vault password is incorrect.' });
     }
     next();
   });

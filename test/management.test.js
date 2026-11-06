@@ -65,3 +65,51 @@ test('proxy forwards allowed management writes to Discord and correctly returns 
  const response=await request({token:'synthetic',path:'/channels/2/permissions/3',method:'PUT',body:{allow:'0',deny:'2048',type:0}});
  assert.equal(response.status,204);assert.equal(await response.text(),'');assert.equal(requests[0].url,'https://discord.com/api/v10/channels/2/permissions/3');assert.equal(requests[0].init.method,'PUT');assert.deepEqual(JSON.parse(requests[0].init.body),{allow:'0',deny:'2048',type:0});
 });
+
+test('client uses status fallback for non-JSON failures but preserves successful JSON parse errors',async()=>{
+ const {requestDiscord}=await import('../src/discord-api.js');
+ await assert.rejects(requestDiscord({},async()=>new Response('<html>Unavailable</html>',{status:503})),/Discord request failed \(503\)/);
+ await assert.rejects(requestDiscord({},async()=>new Response('bad JSON',{status:200})),SyntaxError);
+});
+
+test('proxy limits clients and aggregate forwarding before Discord fetch, then resets',async()=>{
+ const {createRequestLimiter}=await import('../request-limits.js');
+ const {createDiscordProxy}=await import('../discord-proxy.js');
+ let time=0,forwarded=0;
+ const proxy=createDiscordProxy(async()=>{forwarded++;return new Response(null,{status:204})},createRequestLimiter({clientLimit:2,globalLimit:3,windowMs:1000,now:()=>time}));
+ const send=async ip=>{const res={code:200,set(){return this},status(code){this.code=code;return this},json(){return this},end(){return this}};await proxy({ip,body:{token:'invalid-synthetic',path:'/users/@me'}},res);return res.code};
+ assert.equal(await send('a'),204);assert.equal(await send('a'),204);assert.equal(await send('a'),429);assert.equal(forwarded,2);
+ assert.equal(await send('b'),204);assert.equal(await send('c'),429);assert.equal(forwarded,3);
+ time=1000;assert.equal(await send('a'),204);assert.equal(forwarded,4);
+});
+
+test('bot roles coalesce per guild, refresh, expire, recover after failure and isolate sessions',async()=>{
+ const {createBotRoleCache}=await import('../src/bot-role-cache.js');
+ let time=0,calls=0,resolve;
+ const cache=createBotRoleCache({now:()=>time,maxAge:100});
+ const load=()=>{calls++;return new Promise(r=>{resolve=r})};
+ const first=cache.get('g',load),second=cache.get('g',load);await Promise.resolve();assert.equal(calls,1);resolve({roles:['a']});assert.deepEqual(await first,['a']);assert.deepEqual(await second,['a']);
+ assert.deepEqual(await cache.get('g',load),['a']);assert.equal(calls,1);
+ cache.update('g',['b']);assert.deepEqual(await cache.get('g',load),['b']);
+ time=101;const expired=cache.get('g',load);await Promise.resolve();assert.equal(calls,2);cache.clear();resolve({roles:['old-session']});await expired;
+ assert.deepEqual(await cache.get('g',async()=>({roles:['new-session']})),['new-session']);
+ cache.clear();await assert.rejects(cache.get('g',async()=>{throw Error('unavailable')}));
+ assert.deepEqual(await cache.get('g',async()=>({roles:['retry']})),['retry']);
+ const pending=cache.get('other',load);await Promise.resolve();cache.update('other',['gateway']);resolve({roles:['stale']});await pending;
+ assert.deepEqual(await cache.get('other',load),['gateway']);
+});
+
+test('forwarded client IDs are trusted only behind the configured single proxy',async t=>{
+ const express=(await import('express')).default;
+ const {createDiscordProxy}=await import('../discord-proxy.js');
+ const {createRequestLimiter}=await import('../request-limits.js');
+ for(const trust of [false,1]){
+  const app=express();app.set('trust proxy',trust);app.use(express.json());
+  app.post('/api/discord',createDiscordProxy(async()=>new Response(null,{status:204}),createRequestLimiter({clientLimit:1,globalLimit:10})));
+  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const send=ip=>fetch(`http://127.0.0.1:${server.address().port}/api/discord`,{method:'POST',headers:{'Content-Type':'application/json','X-Forwarded-For':ip},body:JSON.stringify({token:'synthetic',path:'/users/@me'})});
+  assert.equal((await send('192.0.2.1')).status,204);
+  assert.equal((await send('192.0.2.2')).status,trust?204:429);
+  assert.equal((await send('spoofed, 192.0.2.1')).status,429);
+ }
+});

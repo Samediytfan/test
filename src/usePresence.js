@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-export default function usePresence(token, enabled, guildId, memberIds=[], presenceEnabled=true, onEvent) {
+export default function usePresence(token, enabled, guildId, memberIds=[], presenceEnabled=true, onEvent, onMemberUpdate) {
  const socketRef=useRef(null);
  const callback=useRef(onEvent);callback.current=onEvent;
+ const memberCallback=useRef(onMemberUpdate);memberCallback.current=onMemberUpdate;
  const [state,setState]=useState({members:{},message:''});
  useEffect(()=>{
   setState({members:{},message:''});if(!token||!enabled)return;
@@ -21,6 +22,7 @@ export default function usePresence(token, enabled, guildId, memberIds=[], prese
     if(packet.op===1)send(1,seq);
     if(packet.op===7||packet.op===9)socket.close(4000,'Reconnect requested');
     if(packet.t==='READY'){attempts=0;setState({members:{},message:requestPresence?'Live status connected':presenceEnabled?'Notifications connected; enable Presence Intent for member status.':'Notifications connected; live status disabled.'})}
+    if(packet.t==='GUILD_MEMBER_UPDATE')memberCallback.current?.(packet.d);
     if(packet.t==='MESSAGE_CREATE')callback.current?.(packet.d);
     if(packet.t==='GUILD_CREATE'||packet.t==='GUILD_MEMBERS_CHUNK'||packet.t==='PRESENCE_UPDATE'){
      const guildId=packet.t==='GUILD_CREATE'?packet.d.id:packet.d.guild_id;

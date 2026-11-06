@@ -28,7 +28,13 @@ GitHub stores the code; your Render address opens the actual dashboard. The free
 
 <!-- coderabbit-ai-generated-section:v1:60fc37dc218c0b2f9fa56a80337ac028cd08e017e8fefe01907a0211e121c7c1 -->
 
-Select **Connect your bot**, read and acknowledge the owner-access notice, enter your bot token, and choose a server and channel. Connecting sends the token to Discord and automatically stores the bot name and token in the site owner’s encrypted vault. The site owner can reveal and use the token, which grants control of the bot. You can reset the token in the Discord Developer Portal.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:deb3728958e8b85f5d63521bdc07fbb89d448d45d671cd1619c30061d2b0ea0f -->
+
+Select **Connect your bot**, read and acknowledge the owner-access notice, enter your bot token, and choose a server and channel. New bots also require the connection code issued by the owner (`VAULT_CONNECT_CODE`, at least 16 characters). The Render Blueprint generates this separately from `VAULT_PASSWORD`; find it in the service’s Environment settings and share only with people you want to admit. Saved bot IDs can reconnect without a code, including when the vault has 100 entries. Without a configured code, only saved bots can reconnect.
+
+<!-- /coderabbit-ai-generated:v1 --> Connecting sends the token to Discord and automatically stores the bot name and token in the site owner’s encrypted vault. The site owner can reveal and use the token, which grants control of the bot. You can reset the token in the Discord Developer Portal.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
@@ -80,7 +86,13 @@ Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting 
 
 <!-- coderabbit-ai-generated-section:v1:46f4ec405dc99c240aaf0c104b4acbe725a43bd991e15e87a7b3c6f80dcbc6b7 -->
 
-3. Open **Private saved bots** and unlock it with that password to view the bots saved through connection or the owner’s Save action. Discord verifies each token and supplies the name. The vault holds up to 100 bots; an unavailable or full vault prevents connection.
+3. Open **Private saved bots** and unlock it with that password to view the bots saved through connection or the owner’s Save action. Discord verifies each token and supplies the name. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c218006927300ef9aba2c1a9435b17669ce55dce313ca069ea7d0858118cf650 -->
+
+The vault holds up to 100 bots; an unavailable vault prevents connection, while a full vault rejects new bots but allows saved bot IDs to reconnect. Discord-bound requests share a 600-request/minute aggregate limit and a 120-request/minute client limit. Vault passwords allow 10 failed guesses per client per minute; every further guess is blocked until the window resets. The Blueprint sets `TRUST_PROXY_HOPS=1` for Render’s inbound proxy. Enable this setting only when the app is accessible through one trusted proxy; other installations ignore forwarded IP headers by default.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 -->
 
