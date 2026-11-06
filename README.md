@@ -20,7 +20,27 @@ GitHub stores the code; your Render address opens the actual dashboard. The free
 
 ## Use the website
 
-Select **Connect your bot**, enter your bot token, and choose a server and channel. The token is kept in browser memory for the current page session and forwarded through the server to Discord.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:badd9bbab5b7642c4aaca426365a6543093af7b061d0350abe8cf9a26b0aee5a -->
+
+Select **Connect your bot**, enter your bot token, and choose a server and channel. Connecting keeps your token in browser memory for the current page session and forwards it through the server to Discord. Saving it in the private vault requires a separate action.
+
+## Private saved bots
+
+Only save tokens you own. Open the **lock icon** in the website to unlock, save, reveal, use, or remove your bots.
+
+1. On Render, sync the updated Blueprint. It generates a private `VAULT_PASSWORD` environment variable if one does not already exist.
+2. Open the web service’s **Environment** settings to retrieve that password. Keep it private: anyone who knows it can reveal saved tokens.
+3. Open **Private saved bots** in the website and unlock it with that password. Select **Save bot to encrypted file** to opt in to saving a token. Discord verifies the token and supplies the name.
+
+The vault is stored in `secret/bots.enc.json` on the server running the website. The whole file, including bot names, is encrypted with AES-256-GCM and a key derived from the vault password. It is excluded from Git and is not available at a public URL. The password is held only in memory while the vault dialog is open. A missing password, or one shorter than 16 characters, disables the vault.
+
+**Render Free does not preserve this file across restarts, inactivity, or deployments.** Download an **Encrypted backup** after changes and use **Restore backup** with the same password after data loss. Keep the same vault password; changing it prevents reading existing files and backups. For durable server storage, configure a persistent disk separately and point `VAULT_FILE` at a private path on it. This project does not provision paid storage.
+
+A file saved on Render lives on Render, not in the Coding Agent workspace. No visitor’s token is saved automatically. Removing a saved bot does not revoke its token in Discord.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 The bot must already be in the server with the permissions needed for your actions. The Server Members intent is needed to list members, and the Message Content intent may be needed to view message content. Messages refresh every ten seconds.
 

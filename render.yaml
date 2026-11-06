@@ -10,3 +10,5 @@ services:
         value: 24.21.0
       - key: NODE_ENV
         value: production
+      - key: VAULT_PASSWORD
+        generateValue: true

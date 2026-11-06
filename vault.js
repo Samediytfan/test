@@ -1,0 +1,93 @@
+import { Router } from 'express';
+import { randomBytes, createCipheriv, createDecipheriv, scryptSync, createHash, timingSafeEqual } from 'node:crypto';
+import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
+
+const aad = Buffer.from('relay-vault-v1');
+function encrypt(bots, password) {
+  const salt = randomBytes(16), iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', scryptSync(password, salt, 32), iv);
+  cipher.setAAD(aad);
+  const data = Buffer.concat([cipher.update(JSON.stringify(bots), 'utf8'), cipher.final()]);
+  return { version: 1, salt: salt.toString('base64'), iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') };
+}
+function decrypt(envelope, password) {
+  if (envelope?.version !== 1) throw new Error('Invalid backup');
+  for (const [key, size] of [['salt', 16], ['iv', 12], ['tag', 16]]) {
+    if (typeof envelope[key] !== 'string' || Buffer.from(envelope[key], 'base64').length !== size) throw new Error('Invalid backup');
+  }
+  if (typeof envelope.data !== 'string' || envelope.data.length > 500000) throw new Error('Invalid backup');
+  const cipher = createDecipheriv('aes-256-gcm', scryptSync(password, Buffer.from(envelope.salt, 'base64'), 32), Buffer.from(envelope.iv, 'base64'));
+  cipher.setAAD(aad);
+  cipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+  const bots = JSON.parse(Buffer.concat([cipher.update(Buffer.from(envelope.data, 'base64')), cipher.final()]).toString('utf8'));
+  if (!Array.isArray(bots) || bots.length > 100 || new Set(bots.map(b => b.id)).size !== bots.length || bots.some(b => !/^\d{1,32}$/.test(b.id) || typeof b.name !== 'string' || b.name.length > 100 || typeof b.token !== 'string' || b.token.length > 256 || !b.token.trim())) throw new Error('Invalid backup');
+  return bots;
+}
+
+export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch } = {}) {
+  const router = Router();
+  const enabled = typeof password === 'string' && password.length >= 16;
+  const hash = value => createHash('sha256').update(value).digest();
+  let failures = 0, resetAt = 0, queue = Promise.resolve();
+  router.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
+    const supplied = (req.get('Authorization') || '').replace(/^Bearer /, '');
+    if (!timingSafeEqual(hash(supplied), hash(password))) {
+      if (Date.now() > resetAt) { failures = 0; resetAt = Date.now() + 60000; }
+      return res.status(++failures > 10 ? 429 : 401).json({ message: failures > 10 ? 'Too many failed attempts. Try again in a minute.' : 'Vault password is incorrect.' });
+    }
+    next();
+  });
+  const read = async () => {
+    try { return decrypt(JSON.parse(await readFile(filePath, 'utf8')), password); }
+    catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+  };
+  const save = async bots => {
+    await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
+    const temp = `${filePath}.${randomBytes(8).toString('hex')}.tmp`;
+    try {
+      await writeFile(temp, JSON.stringify(encrypt(bots, password)), { mode: 0o600, flag: 'wx' });
+      await rename(temp, filePath);
+    } finally { await unlink(temp).catch(() => {}); }
+  };
+  const route = fn => (req, res) => {
+    queue = queue.catch(() => {}).then(async () => {
+      try { await fn(req, res); }
+      catch { res.status(500).json({ message: 'Could not read or update the encrypted vault. Check storage access and keep the same vault password.' }); }
+    });
+  };
+  router.get('/', route(async (_req, res) => res.json((await read()).map(({ id, name }) => ({ id, name })))));
+  router.post('/bots', route(async (req, res) => {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim().replace(/^Bot\s+/i, '') : '';
+    if (!token || token.length > 256) return res.status(400).json({ message: 'Enter a valid bot token.' });
+    const response = await fetchImpl('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bot ${token}` }, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) return res.status(400).json({ message: 'Discord could not verify this bot token.' });
+    const user = await response.json();
+    if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return res.status(400).json({ message: 'Only bot accounts can be saved.' });
+    const bots = await read();
+    const rest = bots.filter(b => b.id !== user.id);
+    if (rest.length >= 100) return res.status(400).json({ message: 'The vault can hold up to 100 bots.' });
+    await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);
+    res.status(201).json({ id: user.id, name: user.username.slice(0, 100) });
+  }));
+  router.post('/reveal', route(async (req, res) => {
+    const bot = (await read()).find(b => b.id === req.body?.id);
+    if (!bot) return res.status(404).json({ message: 'Saved bot not found.' });
+    res.json({ token: bot.token });
+  }));
+  router.delete('/bots/:id', route(async (req, res) => {
+    await save((await read()).filter(b => b.id !== req.params.id));
+    res.json({ ok: true });
+  }));
+  router.get('/export', route(async (_req, res) => res.json(encrypt(await read(), password))));
+  router.post('/import', route(async (req, res) => {
+    let bots;
+    try { bots = decrypt(req.body?.backup, password); }
+    catch { return res.status(400).json({ message: 'The backup is invalid or was encrypted with a different vault password.' }); }
+    await save(bots);
+    res.json({ count: bots.length });
+  }));
+  return router;
+}
