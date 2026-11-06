@@ -26,7 +26,21 @@ GitHub stores the code; your Render address opens the actual dashboard. The free
 
 Select **Connect your bot**, enter your bot token, and choose a server and channel. Connecting keeps your token in browser memory for the current page session and forwards it through the server to Discord. Saving it in the private vault requires a separate action.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:39c071701d0b07ee820a304cabad194ac48e939c9f7463621da3efeb2ebb8981 -->
+
+## Chat and live status
+
+Use the emoji button to search standard Unicode emoji and choose skin tones. Type `@` for member/role suggestions; selected mentions appear as readable names and send Discord mention IDs. Existing role edits save automatically after a short pause; new roles use Create role. Failed saves show an error and a retry action.
+
+To see live member status, enable **Presence Intent** for your bot in the Discord Developer Portal, then choose **Enable live status** in the website's server menu. This opens a Discord Gateway connection for the current browser session. Missing or disconnected presence data is shown as unknown; invisible users cannot be distinguished from offline users. Disable the connection using the same menu. Large bots that require sharding are not supported by this browser connection.
+
+Native slash commands still require execution in Discord, or a separately implemented integration with the bot's own source/API. Prefix shortcuts send plain messages; the receiving bot must accept bot-authored messages.
+
 ## Private saved bots
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Only save tokens you own. Open the **lock icon** in the website to unlock, save, reveal, use, or remove your bots.
 

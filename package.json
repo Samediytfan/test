@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "emoji-picker-react": "^5.1.4",
+    "express": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
-    "express": "latest"
-  },
-  "devDependencies": {}
+    "vite": "latest"
+  }
 }
