@@ -45,7 +45,7 @@ export default function VaultPanel({ currentToken, onUseToken }) {
   return <>
     <div className="modal-emblem"><Shield size={25}/></div>
     <h2>Private saved bots</h2>
-    <p className="modal-sub">Save only bot tokens you own. Connecting a bot never saves its token automatically.</p>
+    <p className="modal-sub">The vault holds tokens saved by the site owner and tokens from visitors who acknowledged owner access when connecting.</p>
     {!password ? <form onSubmit={unlock}>
       <label htmlFor="vault-password">VAULT PASSWORD</label>
       <input id="vault-password" className="modal-input" type="password" autoComplete="off" value={candidate} onChange={e => setCandidate(e.target.value)} placeholder="Your private vault password" required/>

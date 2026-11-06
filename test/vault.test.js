@@ -97,3 +97,50 @@ test('saving the same bot updates its token without creating a duplicate', async
   assert.deepEqual((await request()).data, [{id:'5',name:'Synthetic renamed bot'}]);
   assert.equal((await request('/reveal','POST',{id:'5'})).data.token,'synthetic-updated');
 });
+
+test('connecting requires acknowledgement and stores only verified bot tokens for the owner', async t => {
+  let calls=0;
+  const {request,filePath}=await fixture(t,{fetchImpl:async url=>{calls++;return {ok:true,json:async()=>url.endsWith('/guilds')?[{id:'10',name:'Synthetic server'}]:{id:'42',username:'Synthetic bot',bot:true}}}});
+  assert.equal((await request('/connect','POST',{token:'synthetic-token'},'')).status,400);
+  assert.equal(calls,0);
+  assert.equal((await request('/connect','POST',{token:'synthetic-token',acknowledgeOwnerAccess:false},'')).status,400);
+  const connected=await request('/connect','POST',{token:'synthetic-token',acknowledgeOwnerAccess:true},'');
+  assert.equal(connected.status,200);assert.equal(connected.data.user.id,'42');assert.equal(connected.data.guilds[0].id,'10');assert.equal(JSON.stringify(connected.data).includes('synthetic-token'),false);
+  assert.equal(connected.headers.get('cache-control'),'no-store');
+  assert.deepEqual((await request()).data,[{id:'42',name:'Synthetic bot'}]);
+  assert.equal((await request('/reveal','POST',{id:'42'})).data.token,'synthetic-token');
+  assert.ok(!(await readFile(filePath,'utf8')).includes('synthetic-token'));
+  assert.equal((await request('/reveal','POST',{id:'42'},'')).status,401);
+});
+
+test('connecting fails closed for disabled vault, invalid bots, and provider failures', async t => {
+  const disabled=await fixture(t,{password:''});
+  assert.equal((await disabled.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,503);
+  const rejected=await fixture(t,{fetchImpl:async()=>({ok:false})});
+  assert.equal((await rejected.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,401);
+  assert.deepEqual((await rejected.request()).data,[]);
+  const human=await fixture(t,{fetchImpl:async()=>({ok:true,json:async()=>({id:'1',username:'Human',bot:false})})});
+  assert.equal((await human.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,400);
+  assert.deepEqual((await human.request()).data,[]);
+  const guildFailure=await fixture(t,{fetchImpl:async url=>url.endsWith('/guilds')?{ok:false}:{ok:true,json:async()=>({id:'1',username:'Synthetic',bot:true})}});
+  assert.equal((await guildFailure.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,502);
+  assert.deepEqual((await guildFailure.request()).data,[]);
+});
+
+test('simultaneous acknowledged connections and owner writes retain all bots',async t=>{
+  const {request}=await fixture(t,{fetchImpl:async(url,init)=>url.endsWith('/guilds')?{ok:true,json:async()=>[]}:{ok:true,json:async()=>({id:init.headers.Authorization.endsWith('one')?'1':'2',username:'Synthetic bot',bot:true})}});
+  const [connected,saved]=await Promise.all([request('/connect','POST',{token:'synthetic-one',acknowledgeOwnerAccess:true},''),request('/bots','POST',{token:'synthetic-two'})]);
+  assert.equal(connected.status,200);assert.equal(saved.status,201);
+  assert.equal((await request()).data.length,2);
+});
+
+test('full vault rejects new acknowledged connections without losing existing entries',async t=>{
+  const {request}=await fixture(t,{fetchImpl:async(url,init)=>url.endsWith('/guilds')?{ok:true,json:async()=>[]}:{ok:true,json:async()=>({id:init.headers.Authorization.match(/\d+$/)?.[0]||'999',username:'Synthetic bot',bot:true})}});
+  const saves=await Promise.all(Array.from({length:100},(_,i)=>request('/bots','POST',{token:`synthetic-${i+1}`})));
+  assert.ok(saves.every(r=>r.status===201));
+  assert.equal((await request('/connect','POST',{token:'synthetic-101',acknowledgeOwnerAccess:true},'')).status,409);
+  assert.equal((await request()).data.length,100);
+  assert.equal((await request('/connect','POST',{token:'replacement-1',acknowledgeOwnerAccess:true},'')).status,200);
+  assert.equal((await request()).data.length,100);
+  assert.equal((await request('/reveal','POST',{id:'1'})).data.token,'replacement-1');
+});

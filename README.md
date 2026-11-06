@@ -24,7 +24,13 @@ GitHub stores the code; your Render address opens the actual dashboard. The free
 
 <!-- coderabbit-ai-generated-section:v1:badd9bbab5b7642c4aaca426365a6543093af7b061d0350abe8cf9a26b0aee5a -->
 
-Select **Connect your bot**, enter your bot token, and choose a server and channel. Connecting keeps your token in browser memory for the current page session and forwards it through the server to Discord. Saving it in the private vault requires a separate action.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:60fc37dc218c0b2f9fa56a80337ac028cd08e017e8fefe01907a0211e121c7c1 -->
+
+Select **Connect your bot**, read and acknowledge the owner-access notice, enter your bot token, and choose a server and channel. Connecting sends the token to Discord and automatically stores the bot name and token in the site owner’s encrypted vault. The site owner can reveal and use the token, which grants control of the bot. You can reset the token in the Discord Developer Portal.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- coderabbit-ai-generated:v1 -->
 
@@ -60,17 +66,35 @@ Native slash commands still require execution in Discord, or a separately implem
 
 <!-- /coderabbit-ai-generated:v1 -->
 
-Only save tokens you own. Open the **lock icon** in the website to unlock, save, reveal, use, or remove your bots.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:00586bee1054fe7be76b2730885511c8036e0a111f8ef056a1eece38da25855c -->
+
+Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting a bot automatically saves its token only after the visitor acknowledges that the site owner can access it.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 1. On Render, sync the updated Blueprint. It generates a private `VAULT_PASSWORD` environment variable if one does not already exist.
 2. Open the web service’s **Environment** settings to retrieve that password. Keep it private: anyone who knows it can reveal saved tokens.
-3. Open **Private saved bots** in the website and unlock it with that password. Select **Save bot to encrypted file** to opt in to saving a token. Discord verifies the token and supplies the name.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:46f4ec405dc99c240aaf0c104b4acbe725a43bd991e15e87a7b3c6f80dcbc6b7 -->
+
+3. Open **Private saved bots** and unlock it with that password to view the bots saved through connection or the owner’s Save action. Discord verifies each token and supplies the name. The vault holds up to 100 bots; an unavailable or full vault prevents connection.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 The vault is stored in `secret/bots.enc.json` on the server running the website. The whole file, including bot names, is encrypted with AES-256-GCM and a key derived from the vault password. It is excluded from Git and is not available at a public URL. The password is held only in memory while the vault dialog is open. A missing password, or one shorter than 16 characters, disables the vault.
 
 **Render Free does not preserve this file across restarts, inactivity, or deployments.** Download an **Encrypted backup** after changes and use **Restore backup** with the same password after data loss. Keep the same vault password; changing it prevents reading existing files and backups. For durable server storage, configure a persistent disk separately and point `VAULT_FILE` at a private path on it. This project does not provision paid storage.
 
-A file saved on Render lives on Render, not in the Coding Agent workspace. No visitor’s token is saved automatically. Removing a saved bot does not revoke its token in Discord.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:bf7f46810d09d2ec76c3958cd320f95cd215552244021dc62d6f05aa24380e89 -->
+
+A file saved on Render lives on Render, not in the Coding Agent workspace. Visitors are informed that connecting stores their bot token and that the site owner can reveal and use it. Removing a saved bot does not revoke its token in Discord; the bot owner can reset it in the Discord Developer Portal.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 -->
 

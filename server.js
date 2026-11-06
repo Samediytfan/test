@@ -12,7 +12,7 @@ app.use((error, _req, res, next) => {
 });
 app.use('/api/vault', createVaultRouter());
 app.use('/secret', (_req, res) => res.sendStatus(404));
-// Connecting stays session-only. Saving in the private vault requires a separate, explicit action.
+// The public connect endpoint is mounted on the vault router; other Discord calls stay fixed-host.
 app.post('/api/discord', createDiscordProxy());
 if (process.env.NODE_ENV === 'production' && existsSync('dist/index.html')) {
   app.use(express.static('dist'));

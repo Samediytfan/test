@@ -30,16 +30,6 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   const enabled = typeof password === 'string' && password.length >= 16;
   const hash = value => createHash('sha256').update(value).digest();
   let failures = 0, resetAt = 0, queue = Promise.resolve();
-  router.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
-    const supplied = (req.get('Authorization') || '').replace(/^Bearer /, '');
-    if (!timingSafeEqual(hash(supplied), hash(password))) {
-      if (Date.now() > resetAt) { failures = 0; resetAt = Date.now() + 60000; }
-      return res.status(++failures > 10 ? 429 : 401).json({ message: failures > 10 ? 'Too many failed attempts. Try again in a minute.' : 'Vault password is incorrect.' });
-    }
-    next();
-  });
   const read = async () => {
     try { return decrypt(JSON.parse(await readFile(filePath, 'utf8')), password); }
     catch (error) { if (error.code === 'ENOENT') return []; throw error; }
@@ -58,6 +48,46 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       catch { res.status(500).json({ message: 'Could not read or update the encrypted vault. Check storage access and keep the same vault password.' }); }
     });
   };
+  // The public connect operation only writes after a visitor has acknowledged the
+  // owner-access notice. It never returns a token or permits reading the vault.
+  router.post('/connect', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!enabled) return res.status(503).json({ message: 'The site vault is unavailable. Ask the site owner to configure it before connecting.' });
+    if (req.body?.acknowledgeOwnerAccess !== true) return res.status(400).json({ message: 'Please acknowledge that the site owner can access your bot token.' });
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim().replace(/^Bot\s+/i, '') : '';
+    if (!token || token.length > 256) return res.status(400).json({ message: 'Enter a valid bot token.' });
+    let user, guilds;
+    try {
+      const headers = { Authorization: `Bot ${token}` };
+      const response = await fetchImpl('https://discord.com/api/v10/users/@me', { headers, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) return res.status(401).json({ message: 'Discord could not verify this bot token.' });
+      user = await response.json();
+      if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return res.status(400).json({ message: 'Only bot accounts can be connected.' });
+      const guildResponse = await fetchImpl('https://discord.com/api/v10/users/@me/guilds', { headers, signal: AbortSignal.timeout(15000) });
+      if (!guildResponse.ok) return res.status(502).json({ message: 'Discord could not load the bot’s servers. Please try again.' });
+      guilds = await guildResponse.json();
+      if (!Array.isArray(guilds)) throw new Error('Invalid Discord response');
+    } catch {
+      return res.status(502).json({ message: 'Could not reach Discord. Please try again.' });
+    }
+    return route(async (_req, response) => {
+      const bots = await read();
+      const rest = bots.filter(b => b.id !== user.id);
+      if (rest.length >= 100) return response.status(409).json({ message: 'The site vault is full. Ask the site owner to remove a saved bot.' });
+      await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);
+      response.json({ user, guilds });
+    })(req, res);
+  });
+  router.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
+    const supplied = (req.get('Authorization') || '').replace(/^Bearer /, '');
+    if (!timingSafeEqual(hash(supplied), hash(password))) {
+      if (Date.now() > resetAt) { failures = 0; resetAt = Date.now() + 60000; }
+      return res.status(++failures > 10 ? 429 : 401).json({ message: failures > 10 ? 'Too many failed attempts. Try again in a minute.' : 'Vault password is incorrect.' });
+    }
+    next();
+  });
   router.get('/', route(async (_req, res) => res.json((await read()).map(({ id, name }) => ({ id, name })))));
   router.post('/bots', route(async (req, res) => {
     const token = typeof req.body?.token === 'string' ? req.body.token.trim().replace(/^Bot\s+/i, '') : '';
