@@ -3,7 +3,7 @@ import PermissionEditor from './PermissionEditor.jsx';
 const defaults={name:'New role',permissions:'0',color:0,hoist:false,mentionable:false,unicode_emoji:null};
 export default function RoleManager({guildId,roles,setRoles,members,setMembers,demo,api,onNotify}) {
   const [selectedId,setSelectedId]=useState(roles.find(r=>r.id!==guildId)?.id||guildId),[draft,setDraft]=useState(defaults),[memberId,setMemberId]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
-  const dirty=useRef(false),saveRef=useRef(null),mounted=useRef(true),queue=useRef(Promise.resolve()),revision=useRef(0),latest=useRef(null);
+  const dirty=useRef(false),saveRef=useRef(null),mounted=useRef(true),queue=useRef(Promise.resolve()),revision=useRef(0),latest=useRef(null),creating=useRef(false);
   const [saving,setSaving]=useState(0);
   const edit=value=>{dirty.current=true;revision.current++;setDraft(value)};
   const selected=roles.find(r=>r.id===selectedId),everyone=selectedId===guildId,managed=Boolean(selected?.managed);
@@ -12,6 +12,7 @@ export default function RoleManager({guildId,roles,setRoles,members,setMembers,d
   const choose=id=>{saveRef.current?.();dirty.current=false;setSelectedId(id)};
   const run=async fn=>{const id=selectedId,name=selected?.name||draft.name;setBusy(true);setError('');setNotice('');try{await fn()}catch(e){if(mounted.current)setError({id,message:e.message});else onNotify?.(`${name}: ${e.message}`)}finally{if(mounted.current)setBusy(false)}};
   const enqueue=job=>{
+    if(!job.selected){if(creating.current)return queue.current;creating.current=true;}
     if(mounted.current)setSaving(n=>n+1);
     queue.current=queue.current.catch(()=>{}).then(async()=>{
       const {id,draft:value,selected:roleBefore}=job,all=id===guildId;
@@ -27,7 +28,7 @@ export default function RoleManager({guildId,roles,setRoles,members,setMembers,d
           if(latest.current.id===id&&revision.current===job.revision){setDraft({...defaults,...role,color:role.colors?.primary_color??role.color??0});setNotice({id,message:'Role saved.'});if(!roleBefore)setSelectedId(role.id)}
         }
       }catch(e){if(mounted.current)setError({id,message:`${value.name}: ${e.message}`,job});else onNotify?.(`${value.name}: ${e.message}`)}
-      finally{if(mounted.current)setSaving(n=>n-1)}
+      finally{if(!roleBefore)creating.current=false;if(mounted.current)setSaving(n=>n-1)}
     });
     return queue.current;
   };

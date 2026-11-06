@@ -94,7 +94,7 @@ test('bot roles coalesce per guild, refresh, expire, recover after failure and i
  time=101;const expired=cache.get('g',load);await Promise.resolve();assert.equal(calls,2);cache.clear();resolve({roles:['old-session']});await expired;
  assert.deepEqual(await cache.get('g',async()=>({roles:['new-session']})),['new-session']);
  cache.clear();await assert.rejects(cache.get('g',async()=>{throw Error('unavailable')}));
- assert.deepEqual(await cache.get('g',async()=>({roles:['retry']})),['retry']);
+ time+=10000;assert.deepEqual(await cache.get('g',async()=>({roles:['retry']})),['retry']);
  const pending=cache.get('other',load);await Promise.resolve();cache.update('other',['gateway']);resolve({roles:['stale']});await pending;
  assert.deepEqual(await cache.get('other',load),['gateway']);
 });
@@ -112,4 +112,39 @@ test('forwarded client IDs are trusted only behind the configured single proxy',
   assert.equal((await send('192.0.2.2')).status,trust?204:429);
   assert.equal((await send('spoofed, 192.0.2.1')).status,429);
  }
+});
+
+
+test('Discord budgets isolate unverified traffic, route capacity and rotating addresses',async()=>{
+ const {createDiscordBudgets}=await import('../request-limits.js');
+ let time=0;const budgets=createDiscordBudgets({now:()=>time});
+ const send=(route,ip,token)=>{let status=200;const res={set(){},status(code){status=code;return this},json(){}};budgets[route]({ip,body:{token}},res,()=>{});return status};
+ for(let i=0;i<30;i++)assert.equal(send('proxy','client-'+i,'not-verified'),200);
+ assert.equal(send('proxy','rotated','not-verified'),429);
+ budgets.markVerified('confirmed');assert.equal(send('proxy','rotated','confirmed'),200);
+ assert.equal(send('connect','rotated','not-verified'),200);
+ for(let i=1;i<30;i++)assert.equal(send('connect','client-'+i,'not-verified'),200);
+ assert.equal(send('connect','new','not-verified'),429);
+ for(let i=0;i<449;i++)assert.equal(send('proxy','known-'+i,'confirmed'),200);
+ assert.equal(send('proxy','another','confirmed'),429);
+ budgets.invalidate('confirmed');assert.equal(send('proxy','another','confirmed'),429);
+ time=60000;assert.equal(send('proxy','another','not-verified'),200);
+});
+
+test('role lookup failure backoff is guild-scoped and Gateway updates override it',async()=>{
+ const {createBotRoleCache}=await import('../src/bot-role-cache.js');let time=0,calls=0;
+ const cache=createBotRoleCache({now:()=>time,failureBackoff:100});const fail=async()=>{calls++;throw Error('unavailable')};
+ await assert.rejects(cache.get('a',fail));await assert.rejects(cache.get('a',fail));assert.equal(calls,1);
+ assert.deepEqual(await cache.get('b',async()=>({roles:['independent']})),['independent']);
+ cache.update('a',['gateway']);assert.deepEqual(await cache.get('a',fail),['gateway']);assert.equal(calls,1);
+ cache.clear();await assert.rejects(cache.get('a',fail));time=100;await assert.rejects(cache.get('a',fail));assert.equal(calls,3);
+});
+
+test('malformed proxy requests never consume Discord forwarding capacity',async()=>{
+ const {createDiscordProxy}=await import('../discord-proxy.js');let admitted=0;
+ const proxy=createDiscordProxy(async()=>new Response(null,{status:204}),(req,res,next)=>{admitted++;return next()});
+ const res={status(){return this},json(){},end(){}};
+ for(let i=0;i<100;i++)await proxy({body:{token:' ',path:'/users/@me'}},res);
+ await proxy({body:{token:'synthetic',path:'/disallowed'}},res);assert.equal(admitted,0);
+ await proxy({body:{token:'synthetic',path:'/users/@me'}},res);assert.equal(admitted,1);
 });

@@ -167,3 +167,14 @@ test('password guess windows reset before authentication',async t=>{
  time+=60000;
  assert.equal((await request()).status,200);
 });
+
+
+test('vault attempt capacity fails closed without evicting active lockouts',async t=>{
+ let time=0;const {request}=await fixture(t,{authClientCapacity:2,now:()=>time});
+ for(let i=0;i<10;i++)assert.equal((await request('', 'GET',undefined,'wrong','192.0.2.1')).status,401);
+ assert.equal((await request('', 'GET',undefined,'wrong','192.0.2.2')).status,401);
+ assert.equal((await request('', 'GET',undefined,password,'192.0.2.3')).status,429);
+ assert.equal((await request('', 'GET',undefined,password,'192.0.2.1')).status,429);
+ assert.equal((await request('', 'GET',undefined,password,'192.0.2.2')).status,200);
+ time=60000;assert.equal((await request('', 'GET',undefined,password,'192.0.2.3')).status,200);
+});

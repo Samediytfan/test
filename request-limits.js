@@ -15,5 +15,26 @@ export function createRequestLimiter({ clientLimit = 120, globalLimit = 600, win
     return next();
   };
 }
-// Shared across the proxy and public bot verification, both use Discord's budget.
-export const discordRequestLimit = createRequestLimiter();
+
+// Only a successful Discord response establishes a token identity. Never trust a
+// submitted token or forwarded header as proof of authentication.
+import { createHash } from 'node:crypto';
+export function createDiscordBudgets({ now = Date.now } = {}) {
+  const verified = new Map(), ttl = 3600000;
+  const key = token => createHash('sha256').update(token.trim().replace(/^Bot\s+/i, '')).digest('hex');
+  const prune = () => { for (const [id, expires] of verified) { if (expires > now()) break; verified.delete(id); } };
+  const markVerified = token => { prune(); const id = key(token); if (!verified.has(id) && verified.size < 1000) verified.set(id, now() + ttl); };
+  const route = (knownLimit, unknownLimit) => {
+    const known = createRequestLimiter({ globalLimit: knownLimit, now });
+    const unknown = createRequestLimiter({ clientLimit: 10, globalLimit: unknownLimit, now });
+    return (req, res, next) => {
+      prune();
+      const token = req.body?.token;
+      const trusted = typeof token === 'string' && verified.has(key(token));
+      return (trusted ? known : unknown)(req, res, next);
+    };
+  };
+  // Fixed aggregate ceilings sum to 600/minute, independent of client rotation.
+  return { proxy: route(450, 30), connect: route(90, 30), markVerified, invalidate: token => verified.delete(key(token)) };
+}
+export const discordBudgets = createDiscordBudgets();

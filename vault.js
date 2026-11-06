@@ -1,4 +1,4 @@
-import { clientId, discordRequestLimit } from './request-limits.js';
+import { clientId, discordBudgets } from './request-limits.js';
 import { Router } from 'express';
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync, createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
@@ -26,7 +26,7 @@ function decrypt(envelope, password) {
   return bots;
 }
 
-export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, connectLimit = discordRequestLimit, now = Date.now } = {}) {
+export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, connectLimit = discordBudgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   const enabled = typeof password === 'string' && password.length >= 16;
@@ -53,19 +53,22 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   };
   // The public connect operation only writes after a visitor has acknowledged the
   // owner-access notice. It never returns a token or permits reading the vault.
-  router.post('/connect', connectLimit, async (req, res) => {
+  router.post('/connect', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!enabled) return res.status(503).json({ message: 'The site vault is unavailable. Ask the site owner to configure it before connecting.' });
     if (req.body?.acknowledgeOwnerAccess !== true) return res.status(400).json({ message: 'Please acknowledge that the site owner can access your bot token.' });
     const token = typeof req.body?.token === 'string' ? req.body.token.trim().replace(/^Bot\s+/i, '') : '';
     if (!token || token.length > 256) return res.status(400).json({ message: 'Enter a valid bot token.' });
+    return connectLimit(req, res, async () => {
     let user, guilds;
     try {
       const headers = { Authorization: `Bot ${token}` };
       const response = await fetchImpl('https://discord.com/api/v10/users/@me', { headers, signal: AbortSignal.timeout(15000) });
+      if (response.status === 401) discordBudgets.invalidate(token);
       if (!response.ok) return res.status(401).json({ message: 'Discord could not verify this bot token.' });
       user = await response.json();
       if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return res.status(400).json({ message: 'Only bot accounts can be connected.' });
+      discordBudgets.markVerified(token);
       const guildResponse = await fetchImpl('https://discord.com/api/v10/users/@me/guilds', { headers, signal: AbortSignal.timeout(15000) });
       if (!guildResponse.ok) return res.status(502).json({ message: 'Discord could not load the bot’s servers. Please try again.' });
       guilds = await guildResponse.json();
@@ -81,13 +84,21 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);
       response.json({ user, guilds });
     })(req, res);
+    });
   });
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
     const time = now(), id = clientId(req);
-    for (const [key, entry] of attempts) if (time >= entry.resetAt) attempts.delete(key);
+    // Windows have fixed lifetimes and insertion order; cleanup is capped per request.
+    let cleaned = 0;
+    for (const [key, entry] of attempts) {
+      if (entry.resetAt > time || cleaned++ >= 16) break;
+      attempts.delete(key);
+    }
+    if (attempts.get(id)?.resetAt <= time) attempts.delete(id);
     let entry = attempts.get(id);
+    if (!entry && attempts.size >= authClientCapacity) { res.set('Retry-After', '60'); return res.status(429).json({ message: 'Too many authentication clients. Try again in a minute.' }); }
     if (!entry) { entry = { failures: 0, resetAt: time + 60000 }; attempts.set(id, entry); }
     if (entry.failures >= 10) { res.set('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt-time)/1000)))); return res.status(429).json({ message: 'Too many failed attempts. Try again in a minute.' }); }
     const supplied = (req.get('Authorization') || '').replace(/^Bearer /, '');
