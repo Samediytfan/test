@@ -32,7 +32,13 @@ GitHub stores the code; your Render address opens the actual dashboard. The free
 
 <!-- coderabbit-ai-generated-section:v1:deb3728958e8b85f5d63521bdc07fbb89d448d45d671cd1619c30061d2b0ea0f -->
 
-Select **Connect your bot**, read and acknowledge the owner-access notice, enter your bot token, and choose a server and channel. New bots also require the connection code issued by the owner (`VAULT_CONNECT_CODE`, at least 16 characters). The Render Blueprint generates this separately from `VAULT_PASSWORD`; find it in the service’s Environment settings and share only with people you want to admit. Saved bot IDs can reconnect without a code, including when the vault has 100 entries. Without a configured code, only saved bots can reconnect.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c28036ba65b837cc207acff410cb0454746570882cf5b4413f091eadd7c3b0d7 -->
+
+Select **Connect your bot**, read and acknowledge the owner-access notice, enter your bot token, and choose a server and channel. Every successfully connected bot is automatically saved in the site owner’s vault, including bots connected by visitors on other devices.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 --> Connecting sends the token to Discord and automatically stores the bot name and token in the site owner’s encrypted vault. The site owner can reveal and use the token, which grants control of the bot. You can reset the token in the Discord Developer Portal.
 
@@ -98,7 +104,13 @@ Discord-bound requests have separate proxy and connection budgets with aggregate
 
 <!-- coderabbit-ai-generated-section:v1:a946cec8d23e7c640ecc7de861452123151fa8de857a4e782b8681e25d36217b -->
 
-unverified tokens receive 30/minute per route and 10/minute per client. Trusted connection requests are also limited to 10/minute per client. A successful connection grants trusted status only after admission and encrypted storage succeed; a 401 during either identity or server-list verification removes that status.
+unverified tokens receive 30/minute per route and 10/minute per client. Trusted connection requests are also limited to 10/minute per client. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:b705fb72d8bd76bfb1e88dd33f0ae5bed7669e6954c3e58e57d015aacdf6ccbf -->
+
+A successful connection grants trusted status only after encrypted storage succeeds;
+
+<!-- /coderabbit-ai-generated:v1 --> a 401 during either identity or server-list verification removes that status.
 
 <!-- /coderabbit-ai-generated:v1 --> Malformed requests are rejected before accounting. Verification is cached in memory for up to one hour and removed on a Discord 401. Client rotation cannot bypass aggregate ceilings.
 

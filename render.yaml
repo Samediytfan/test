@@ -12,7 +12,5 @@ services:
         value: production
       - key: VAULT_PASSWORD
         generateValue: true
-      - key: VAULT_CONNECT_CODE
-        generateValue: true
       - key: TRUST_PROXY_HOPS
         value: "1"

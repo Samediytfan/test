@@ -26,7 +26,7 @@ function decrypt(envelope, password) {
   return bots;
 }
 
-export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, connectCode = process.env.VAULT_CONNECT_CODE, budgets = discordBudgets, connectLimit = budgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
+export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), fetchImpl = fetch, budgets = discordBudgets, connectLimit = budgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   const enabled = typeof password === 'string' && password.length >= 16;
@@ -78,7 +78,6 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     }
     return route(async (_req, response) => {
       const bots = await read();
-      if (!bots.some(b => b.id === user.id) && (typeof connectCode !== 'string' || connectCode.length < 16 || !timingSafeEqual(hash(String(req.body?.connectCode || '')), hash(connectCode)))) return response.status(403).json({ message: 'Ask the owner for a connection code to add a new bot.' });
       const rest = bots.filter(b => b.id !== user.id);
       if (rest.length >= 100) return response.status(409).json({ message: 'The site vault is full. Ask the site owner to remove a saved bot.' });
       await save([...rest, { id: user.id, name: user.username.slice(0, 100), token }]);

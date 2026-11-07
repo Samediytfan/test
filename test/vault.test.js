@@ -7,14 +7,13 @@ import { join } from 'node:path';
 import { createDiscordBudgets } from '../request-limits.js';
 import { createVaultRouter } from '../vault.js';
 
-const connectCode = 'synthetic-owner-invite-code';
 const password = 'synthetic-test-password-only';
 async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'relay-vault-test-'));
   const filePath = join(dir, 'secret', 'bots.enc.json');
   const app = express(); app.set('trust proxy', 'loopback'); app.use(express.json());
   let calls = 0;
-  app.use('/api/vault', createVaultRouter({ password, connectCode, filePath, budgets: createDiscordBudgets(), fetchImpl: async (_url, init) => {
+  app.use('/api/vault', createVaultRouter({ password, filePath, budgets: createDiscordBudgets(), fetchImpl: async (_url, init) => {
     assert.ok(init.headers.Authorization.startsWith('Bot '));
     return { ok: true, json: async () => ({ id: String(++calls), username: `Synthetic bot ${calls}`, bot: true }) };
   }, ...options }));
@@ -23,7 +22,6 @@ async function fixture(t, options = {}) {
   const url = `http://127.0.0.1:${server.address().port}/api/vault`;
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true }); });
   const request = async (path = '', method = 'GET', body, auth = password, client = '192.0.2.1') => {
-    if (path === '/connect' && body) body = { connectCode, ...body };
     const r = await fetch(url + path, { method, headers: { 'X-Forwarded-For': client, Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { status: r.status, headers: r.headers, data: await r.json() };
   };
@@ -144,21 +142,22 @@ test('full vault rejects new acknowledged connections without losing existing en
   assert.ok(saves.every(r=>r.status===201));
   assert.equal((await request('/connect','POST',{token:'synthetic-101',acknowledgeOwnerAccess:true},'')).status,409);
   assert.equal((await request()).data.length,100);
-  assert.equal((await request('/connect','POST',{token:'replacement-1',acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
+  assert.equal((await request('/connect','POST',{token:'replacement-1',acknowledgeOwnerAccess:true},'')).status,200);
   assert.equal((await request()).data.length,100);
   assert.equal((await request('/reveal','POST',{id:'1'})).data.token,'replacement-1');
 });
 
 
-test('new bots require owner admission and rejected writes preserve the encrypted file',async t=>{
- const {request,filePath}=await fixture(t,{fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'8',username:'Synthetic',bot:true}})});
- assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true,connectCode:''},'')).status,403);
- await assert.rejects(readFile(filePath),{code:'ENOENT'});
- assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,200);
- const original=await readFile(filePath,'utf8');
- assert.equal((await request('/connect','POST',{token:'updated',acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
- assert.notEqual(await readFile(filePath,'utf8'),original);
- assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'updated');
+test('different visitors connect without a code and the owner can reveal each token',async t=>{
+ const {request,filePath}=await fixture(t,{fetchImpl:async(url,init)=>url.endsWith('/guilds')?{ok:true,json:async()=>[]}:{ok:true,json:async()=>init.headers.Authorization.endsWith('one')?{id:'8',username:'Bot One',bot:true}:{id:'9',username:'Bot Two',bot:true}}});
+ for (const [token,client] of [['synthetic-one','192.0.2.1'],['synthetic-two','192.0.2.2']]) {
+  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'',client)).status,200);
+ }
+ assert.deepEqual((await request()).data,[{id:'8',name:'Bot One'},{id:'9',name:'Bot Two'}]);
+ assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'synthetic-one');
+ assert.equal((await request('/reveal','POST',{id:'9'})).data.token,'synthetic-two');
+ assert.equal((await request('/reveal','POST',{id:'9'},'')).status,401);
+ const disk=await readFile(filePath,'utf8');assert.ok(!disk.includes('synthetic-one')&&!disk.includes('synthetic-two'));
 });
 
 test('password guess windows reset before authentication',async t=>{
@@ -190,16 +189,17 @@ test('guild lookup 401 invalidates existing trust without changing its error res
  assert.equal(admitted,10,'revoked token must use unverified budget');
 });
 
-test('rejected admission never grants trust; admitted connections enforce trusted client limits',async t=>{
- const budgets=createDiscordBudgets();const token='synthetic-admission-budget';let calls=0;
- const {request,filePath}=await fixture(t,{budgets,fetchImpl:async url=>{calls++;return {ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'8',username:'Synthetic',bot:true}}}});
- assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true,connectCode:''},'')).status,403);
+test('failed validation never grants trust; connected bots enforce trusted client limits',async t=>{
+ const budgets=createDiscordBudgets();const token='synthetic-trust-budget';let calls=0,reject=true;
+ const {request,filePath}=await fixture(t,{budgets,fetchImpl:async url=>{calls++;return reject?{ok:false,status:401}:{ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'8',username:'Synthetic',bot:true}}}});
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,401);
  await assert.rejects(readFile(filePath),{code:'ENOENT'});
  let admitted=0;const res={set(){},status(){return this},json(){}};
  for(let i=0;i<11;i++)budgets.proxy({ip:'probe',body:{token}},res,()=>{admitted++});
- assert.equal(admitted,10,'rejected admission must not grant trusted budget');
+ assert.equal(admitted,10,'failed verification must not grant trusted budget');
+ reject=false;
  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,200);
- for(let i=0;i<10;i++)assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true,connectCode:''},'')).status,200);
+ for(let i=0;i<10;i++)assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,200);
  const before=calls;
  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,429);assert.equal(calls,before,'limited requests must not reach Discord');
  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'','192.0.2.2')).status,200);
