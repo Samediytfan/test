@@ -76,8 +76,8 @@ test('simultaneous writes retain both bots', async t => {
 });
 
 test('Discord verification failure and non-bot identities are never stored', async t => {
-  const rejected = await fixture(t, { fetchImpl: async () => ({ok:false}) });
-  assert.equal((await rejected.request('/bots','POST',{token:'synthetic-rejected'})).status, 400);
+  const rejected = await fixture(t, { fetchImpl: async () => ({ok:false,status:401}) });
+  assert.equal((await rejected.request('/bots','POST',{token:'synthetic-rejected'})).status, 401);
   assert.deepEqual((await rejected.request()).data, []);
   const human = await fixture(t, { fetchImpl: async () => ({ok:true,json:async()=>({id:'1',username:'Synthetic user',bot:false})}) });
   assert.equal((await human.request('/bots','POST',{token:'synthetic-human'})).status, 400);
@@ -118,7 +118,7 @@ test('connecting requires acknowledgement and stores only verified bot tokens fo
 test('connecting fails closed for disabled vault, invalid bots, and provider failures', async t => {
   const disabled=await fixture(t,{password:''});
   assert.equal((await disabled.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,503);
-  const rejected=await fixture(t,{fetchImpl:async()=>({ok:false})});
+  const rejected=await fixture(t,{fetchImpl:async()=>({ok:false,status:401})});
   assert.equal((await rejected.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,401);
   assert.deepEqual((await rejected.request()).data,[]);
   const human=await fixture(t,{fetchImpl:async()=>({ok:true,json:async()=>({id:'1',username:'Human',bot:false})})});
@@ -180,10 +180,10 @@ test('vault attempt capacity fails closed without evicting active lockouts',asyn
 });
 
 
-test('guild lookup 401 invalidates existing trust without changing its error response',async t=>{
+test('guild lookup 401 invalidates existing trust and reports token rejection',async t=>{
  const budgets=createDiscordBudgets();const token='synthetic-guild-revoked';budgets.markVerified(token);
  const {request}=await fixture(t,{budgets,fetchImpl:async url=>url.endsWith('/guilds')?{ok:false,status:401}:{ok:true,json:async()=>({id:'8',username:'Synthetic',bot:true})}});
- assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,502);
+ assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,401);
  let admitted=0;const res={set(){},status(){return this},json(){}};
  for(let i=0;i<11;i++)budgets.proxy({ip:'probe',body:{token}},res,()=>{admitted++});
  assert.equal(admitted,10,'revoked token must use unverified budget');
@@ -203,4 +203,64 @@ test('failed validation never grants trust; connected bots enforce trusted clien
  const before=calls;
  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'')).status,429);assert.equal(calls,before,'limited requests must not reach Discord');
  assert.equal((await request('/connect','POST',{token,acknowledgeOwnerAccess:true},'','192.0.2.2')).status,200);
+});
+
+test('Discord status distinguishes rejected token, rate limit, and temporary errors', async t => {
+ for (const [status, expected, fragment] of [[401, 401, 'rejected'], [429, 429, 'rate limiting'], [503, 502, 'try again']]) {
+  const {request} = await fixture(t, { fetchImpl: async () => ({ok:false,status}) });
+  const r = await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'');
+  assert.equal(r.status, expected);
+  assert.ok(r.data.message.toLowerCase().includes(fragment));
+  const saved = await request('/bots','POST',{token:'synthetic'});
+  assert.equal(saved.status,expected);
+ }
+ const {request} = await fixture(t, { fetchImpl: async () => {throw new Error('network');} });
+ assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status, 502);
+});
+
+test('seven day expiry, reconnection renewal, and old backup do not revive expired entries', async t => {
+ let time=1000000000; const week=7*24*60*60*1000;
+ const f=await fixture(t,{now:()=>time,fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'55',username:'Expiry bot',bot:true}})});
+ const connect=()=>f.request('/connect','POST',{token:'synthetic-expiry',acknowledgeOwnerAccess:true},'');
+ assert.equal((await connect()).status,200);
+ const backup=(await f.request('/export')).data;
+ time+=week-1;
+ assert.equal((await f.request('/reveal','POST',{id:'55'})).status,200);
+ assert.equal((await connect()).status,200);
+ time+=1;
+ assert.equal((await f.request('/reveal','POST',{id:'55'})).status,200);
+ assert.equal((await f.request('/import','POST',{backup})).data.count,0);
+ assert.deepEqual((await f.request()).data,[]);
+ assert.equal((await connect()).status,200);
+ time+=week;
+ assert.equal((await f.request('/reveal','POST',{id:'55'})).status,404);
+ assert.deepEqual((await f.request()).data,[]);
+});
+
+test('notifications fire for new or changed saved tokens only after a successful write', async t => {
+ const notices=[];
+ const f=await fixture(t,{notifyNewToken: async info=>notices.push(info),fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'88',username:'Test bot',bot:true}})});
+ const connect=token=>f.request('/connect','POST',{token,acknowledgeOwnerAccess:true},'');
+ assert.equal((await connect('synthetic-one')).status,200);
+ assert.equal((await connect('synthetic-one')).status,200);
+ assert.equal((await connect('synthetic-two')).status,200);
+ assert.deepEqual(notices,[{name:'Test bot'},{name:'Test bot'}]);
+ const fail=await fixture(t,{notifyNewToken:async info=>notices.push(info),store:{kind:'file',transaction:async()=>{throw new Error('storage');}},fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'1',username:'Bad bot',bot:true}})});
+ assert.equal((await fail.request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status,500);
+ assert.equal(notices.length,2);
+});
+
+test('legacy encrypted backups import with a seven-day expiry', async t => {
+ const { randomBytes, createCipheriv, scryptSync } = await import('node:crypto');
+ let time=2000000000; const week=7*24*60*60*1000;
+ const {request}=await fixture(t,{now:()=>time});
+ const salt=randomBytes(16),iv=randomBytes(12);
+ const cipher=createCipheriv('aes-256-gcm',scryptSync(password,salt,32),iv);
+ cipher.setAAD(Buffer.from('relay-vault-v1'));
+ const bytes=Buffer.concat([cipher.update(JSON.stringify([{id:'7',name:'Legacy bot',token:'synthetic-legacy'}])),cipher.final()]);
+ const backup={version:1,salt:salt.toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:bytes.toString('base64')};
+ assert.equal((await request('/import','POST',{backup})).data.count,1);
+ assert.equal((await request('/reveal','POST',{id:'7'})).data.token,'synthetic-legacy');
+ time+=week;
+ assert.equal((await request('/reveal','POST',{id:'7'})).status,404);
 });

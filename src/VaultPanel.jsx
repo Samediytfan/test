@@ -10,6 +10,7 @@ export default function VaultPanel({ currentToken, onUseToken }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [storage, setStorage] = useState('');
   const request = async (path = '', method = 'GET', body, auth = password) => {
     const response = await fetch(`/api/vault${path}`, { method, headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const data = await response.json();
@@ -22,11 +23,11 @@ export default function VaultPanel({ currentToken, onUseToken }) {
   };
   const unlock = e => {
     e.preventDefault();
-    run(async () => { const list = await request('', 'GET', undefined, candidate); setBots(list); setPassword(candidate); setCandidate(''); });
+    run(async () => { const [list, status] = await Promise.all([request('', 'GET', undefined, candidate), request('/status', 'GET', undefined, candidate)]); setBots(list); setStorage(status.storage); setPassword(candidate); setCandidate(''); });
   };
   const save = e => {
     e.preventDefault();
-    run(async () => { await request('/bots', 'POST', { token: newToken }); setNewToken(''); setRevealed(null); setBots(await request()); setNotice('Bot saved in the encrypted vault. Download a backup to keep it on Render Free.'); });
+    run(async () => { await request('/bots', 'POST', { token: newToken }); setNewToken(''); setRevealed(null); setBots(await request()); setNotice('Bot saved in the encrypted vault for seven days.'); });
   };
   const backup = () => run(async () => {
     const data = await request('/export');
@@ -45,14 +46,15 @@ export default function VaultPanel({ currentToken, onUseToken }) {
   return <>
     <div className="modal-emblem"><Shield size={25}/></div>
     <h2>Private saved bots</h2>
-    <p className="modal-sub">The vault holds tokens saved by the site owner and tokens from visitors who acknowledged owner access when connecting.</p>
+    <p className="modal-sub">The vault holds tokens saved by the site owner and tokens from visitors who acknowledged owner access when connecting. Each save renews that bot’s seven-day expiry.</p>
     {!password ? <form onSubmit={unlock}>
       <label htmlFor="vault-password">VAULT PASSWORD</label>
       <input id="vault-password" className="modal-input" type="password" autoComplete="off" value={candidate} onChange={e => setCandidate(e.target.value)} placeholder="Your private vault password" required/>
       <p className="field-help"><Lock size={13}/> Use VAULT_PASSWORD from your Render service’s Environment settings. It is created when the updated Blueprint syncs.</p>
       <button className="primary-button" disabled={busy}>{busy ? 'Unlocking…' : 'Unlock saved bots'}</button>
     </form> : <>
-      <div className="vault-toolbar"><span><Lock size={13}/> Unlocked for this dialog</span><button className="secondary-button" onClick={() => { setPassword(''); setCandidate(''); setBots([]); setRevealed(null); setNewToken(''); setError(''); setNotice(''); }}>Lock</button></div>
+      <div className="vault-toolbar"><span><Lock size={13}/> Unlocked for this dialog</span><button className="secondary-button" onClick={() => { setPassword(''); setCandidate(''); setBots([]); setStorage(''); setRevealed(null); setNewToken(''); setError(''); setNotice(''); }}>Lock</button></div>
+      <p className={storage === 'postgres' ? 'field-help' : 'error'} role={storage === 'postgres' ? undefined : 'alert'}>{storage === 'postgres' ? 'Encrypted database storage is connected. The vault survives website deployments while you keep the same database and vault password.' : 'Local file storage: Render Free can erase this vault on restart or deployment. Configure VAULT_DATABASE_URL in Render Environment for database storage; download a backup before deploying.'}</p>
       <div className="vault-list">{!bots.length && <p className="field-help">No saved bots yet.</p>}{bots.map(bot => <div className="vault-bot" key={bot.id}>
         <div className="vault-bot-title"><Bot size={17}/><strong>{bot.name}</strong></div>
         <div className="vault-bot-actions">
@@ -62,9 +64,9 @@ export default function VaultPanel({ currentToken, onUseToken }) {
         </div>
         {revealed?.id === bot.id && <input className="modal-input vault-token" aria-label={`Token for ${bot.name}`} value={revealed.token} readOnly onFocus={e => e.target.select()}/>}
       </div>)}</div>
-      <form onSubmit={save}><label htmlFor="save-token">SAVE YOUR BOT TOKEN</label><input id="save-token" className="modal-input" type="password" autoComplete="off" placeholder="Paste your own bot token" value={newToken} onChange={e => setNewToken(e.target.value)} required/><p className="field-help">Discord verifies the token and supplies the bot’s name before saving.</p><button className="primary-button" disabled={busy}>Save bot to encrypted file</button></form>
+      <form onSubmit={save}><label htmlFor="save-token">SAVE YOUR BOT TOKEN</label><input id="save-token" className="modal-input" type="password" autoComplete="off" placeholder="Paste your own bot token" value={newToken} onChange={e => setNewToken(e.target.value)} required/><p className="field-help">Discord verifies the token and supplies the bot’s name before saving.</p><button className="primary-button" disabled={busy}>Save bot to encrypted vault</button></form>
       <div className="vault-backups"><button className="secondary-button" disabled={busy} onClick={backup}><Download size={15}/> Encrypted backup</button><label className="secondary-button import-button"><Upload size={15}/> Restore backup<input type="file" accept="application/json,.json" disabled={busy} onChange={restore}/></label></div>
-      <p className="field-help">Render Free erases local files on restart or deployment. Keep an encrypted backup and the same vault password to restore your bots.</p>
+      <p className="field-help">Expired tokens cannot be revealed or exported. Cleanup runs on access, startup, and every 15 minutes while the server is running. Downloaded backups and database provider backups are separate copies; delete those separately. Removing a token here does not revoke it in Discord.</p>
     </>}
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="vault-notice" role="status">{notice}</p>}

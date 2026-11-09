@@ -82,7 +82,30 @@ Native slash commands still require execution in Discord, or a separately implem
 
 <!-- coderabbit-ai-generated-section:v1:00586bee1054fe7be76b2730885511c8036e0a111f8ef056a1eece38da25855c -->
 
-Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting a bot automatically saves its token only after the visitor acknowledges that the site owner can access it.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:8f3271c3f2098c907f3eda5ea62956cc3fd8a4cfbd753dd14ee30f8178739661 -->
+
+Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting a bot automatically saves its token only after the visitor acknowledges that the site owner can access it. Each save keeps it for seven days in the active vault; another save renews that period. Expired entries are inaccessible on the next vault operation and are cleaned up at startup or every 15 minutes while the server runs. Backups can retain separate copies, so delete those separately. Removing a saved token does not revoke it in Discord.
+
+### Keep the vault across Render deployments
+
+Render Free removes local files during restarts and deploys. To use a database that survives those events:
+
+1. If the current vault contains bots you need, unlock it and download **Encrypted backup** before changing Render settings. Keep the same `VAULT_PASSWORD`.
+2. Create a free PostgreSQL project with [Neon](https://neon.com/), then copy its connection string with TLS enabled (`sslmode=require`). Keep it private.
+3. In the Render web service’s **Environment** settings, add `VAULT_DATABASE_URL` with that connection string. Save and deploy the latest code. The application creates an encrypted vault table in the database. If the database cannot be reached, it does not fall back to the temporary file.
+4. Unlock **Private saved bots**. It should say **Encrypted database storage is connected**. If you downloaded a backup, use **Restore backup** with the original vault password. The new database starts empty and does not copy a local vault automatically. Expired entries in a newer backup are not restored.
+
+If a token was lost and there is no backup, its owner must reconnect it. Database availability, provider limits and backups remain subject to the database provider; keep your own encrypted backups and the vault password private.
+
+### Optional email notices
+
+Set up a [Resend](https://resend.com/) account, verify a sending domain, and create an API key. In the Render web service’s **Environment** settings set `RESEND_API_KEY` to the private key, `RELAY_EMAIL_FROM` to an address on the verified domain, and `RELAY_EMAIL_TO` to the owner’s email address. Save and deploy. Never put these values in GitHub or chat.
+
+A notice includes the bot name but no token. The service sends it after saving a newly connected token; reconnecting the same bot with the same token does not trigger another notice while it remains saved. A changed token, deleted entry, expired entry, or restored older backup may trigger a new notice. Delivery is best effort and mail service failures do not prevent connecting a bot. The provider stores email metadata and content according to its own policies.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- /coderabbit-ai-generated:v1 -->
 
@@ -122,7 +145,13 @@ A successful connection grants trusted status only after encrypted storage succe
 
 The vault is stored in `secret/bots.enc.json` on the server running the website. The whole file, including bot names, is encrypted with AES-256-GCM and a key derived from the vault password. It is excluded from Git and is not available at a public URL. The password is held only in memory while the vault dialog is open. A missing password, or one shorter than 16 characters, disables the vault.
 
-**Render Free does not preserve this file across restarts, inactivity, or deployments.** Download an **Encrypted backup** after changes and use **Restore backup** with the same password after data loss. Keep the same vault password; changing it prevents reading existing files and backups. For durable server storage, configure a persistent disk separately and point `VAULT_FILE` at a private path on it. This project does not provision paid storage.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:36c3113b0b48856829ff13e2e66757a4f45e7712a0c9f891c21afbc8afc044f8 -->
+
+Without `VAULT_DATABASE_URL`, the vault uses a local encrypted file. Render Free can erase that file during restarts and deployments. Download an **Encrypted backup** and retain the same vault password to restore it. Alternatively, configure a paid persistent disk and set `VAULT_FILE` to a private path on it.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 <!-- coderabbit-ai-generated:v1 -->
 

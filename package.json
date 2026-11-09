@@ -14,6 +14,7 @@
     "emoji-picker-react": "^5.1.4",
     "express": "latest",
     "lucide-react": "latest",
+    "pg": "^8.23.1",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
