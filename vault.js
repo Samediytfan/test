@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import { createFileVaultStore } from './vault-storage.js';
 
 const aad = Buffer.from('relay-vault-v1');
-const retentionMs = 7 * 24 * 60 * 60 * 1000;
 function verificationFailure(status) {
   if (status === 401) return { status: 401, data: { message: 'Discord rejected this bot token. Check that it is the current bot token in the Discord Developer Portal.' } };
   if (status === 429) return { status: 429, data: { message: 'Discord is rate limiting connections. Please try again later.' } };
@@ -39,12 +38,13 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   const hash = value => createHash('sha256').update(value).digest();
   const attempts = new Map();
   let queue = Promise.resolve();
-  const activeBots = (bots, time) => bots.filter(b => b.expiresAt === undefined || b.expiresAt > time).map(b => ({ ...b, expiresAt: Math.min(b.expiresAt ?? time + retentionMs, time + retentionMs) }));
+  // Remove expiry metadata from backups created by the unreleased version.
+  const retainedBots = bots => bots.map(({ id, name, token }) => ({ id, name, token }));
   const transact = fn => {
     queue = queue.catch(() => {}).then(() => store.transaction(async tx => {
       const envelope = await tx.read();
       const original = envelope === null ? [] : decrypt(envelope, password);
-      const state = { bots: activeBots(original, now()) };
+      const state = { bots: retainedBots(original) };
       const result = await fn(state);
       if (JSON.stringify(state.bots) !== JSON.stringify(original)) await tx.save(encrypt(state.bots, password));
       return result;
@@ -58,7 +58,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       res.status(result.status || 200).json(result.data);
     } catch { res.status(500).json({ message: 'Could not read or update the encrypted vault. Check storage access and keep the same vault password.' }); }
   };
-  router.pruneExpired = () => enabled ? transact(() => {}) : Promise.resolve();
+  router.verifyStorage = () => enabled ? transact(() => {}) : Promise.resolve();
   // The public connect operation only writes after a visitor has acknowledged the
   // owner-access notice. It never returns a token or permits reading the vault.
   router.post('/connect', async (req, res) => {
@@ -90,7 +90,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       const rest = state.bots.filter(b => b.id !== user.id);
       if (rest.length >= 100) return { status: 409, data: { message: 'The site vault is full. Ask the site owner to remove a saved bot.' } };
       const newToken = !state.bots.some(b => b.id === user.id && b.token === token);
-      state.bots = [...rest, { id: user.id, name: user.username.slice(0, 100), token, expiresAt: now() + retentionMs }];
+      state.bots = [...rest, { id: user.id, name: user.username.slice(0, 100), token }];
       return { data: { user, guilds }, newToken };
     }, result => {
       if (!result.status) {
@@ -122,7 +122,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     }
     next();
   });
-  router.get('/status', route(async () => ({ data: { storage: store.kind, retentionDays: 7 } })));
+  router.get('/status', route(async () => ({ data: { storage: store.kind, retentionDays: null } })));
   router.get('/', route(async (_req, state) => ({ data: state.bots.map(({ id, name }) => ({ id, name })) })));
   router.post('/bots', route(async (req, state) => {
     const token = typeof req.body?.token === 'string' ? req.body.token.trim().replace(/^Bot\s+/i, '') : '';
@@ -133,7 +133,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return { status: 400, data: { message: 'Only bot accounts can be saved.' } };
     const rest = state.bots.filter(b => b.id !== user.id);
     if (rest.length >= 100) return { status: 400, data: { message: 'The vault can hold up to 100 bots.' } };
-    state.bots = [...rest, { id: user.id, name: user.username.slice(0, 100), token, expiresAt: now() + retentionMs }];
+    state.bots = [...rest, { id: user.id, name: user.username.slice(0, 100), token }];
     return { status: 201, data: { id: user.id, name: user.username.slice(0, 100) } };
   }));
   router.post('/reveal', route(async (req, state) => {
@@ -150,7 +150,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
     let bots;
     try { bots = decrypt(req.body?.backup, password); }
     catch { return { status: 400, data: { message: 'The backup is invalid or was encrypted with a different vault password.' } }; }
-    state.bots = activeBots(bots, now());
+    state.bots = retainedBots(bots);
     return { data: { count: state.bots.length } };
   }));
   return router;

@@ -218,23 +218,19 @@ test('Discord status distinguishes rejected token, rate limit, and temporary err
  assert.equal((await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'')).status, 502);
 });
 
-test('seven day expiry, reconnection renewal, and old backup do not revive expired entries', async t => {
+test('saved tokens remain available long after a week and can be restored from backups', async t => {
  let time=1000000000; const week=7*24*60*60*1000;
- const f=await fixture(t,{now:()=>time,fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'55',username:'Expiry bot',bot:true}})});
- const connect=()=>f.request('/connect','POST',{token:'synthetic-expiry',acknowledgeOwnerAccess:true},'');
+ const f=await fixture(t,{now:()=>time,fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/guilds')?[]:{id:'55',username:'Retention bot',bot:true}})});
+ const connect=()=>f.request('/connect','POST',{token:'synthetic-retained',acknowledgeOwnerAccess:true},'');
  assert.equal((await connect()).status,200);
  const backup=(await f.request('/export')).data;
- time+=week-1;
- assert.equal((await f.request('/reveal','POST',{id:'55'})).status,200);
+ time+=52*week;
+ assert.equal((await f.request('/reveal','POST',{id:'55'})).data.token,'synthetic-retained');
  assert.equal((await connect()).status,200);
- time+=1;
- assert.equal((await f.request('/reveal','POST',{id:'55'})).status,200);
- assert.equal((await f.request('/import','POST',{backup})).data.count,0);
- assert.deepEqual((await f.request()).data,[]);
- assert.equal((await connect()).status,200);
- time+=week;
+ await f.request('/bots/55','DELETE');
  assert.equal((await f.request('/reveal','POST',{id:'55'})).status,404);
- assert.deepEqual((await f.request()).data,[]);
+ assert.equal((await f.request('/import','POST',{backup})).data.count,1);
+ assert.equal((await f.request('/reveal','POST',{id:'55'})).data.token,'synthetic-retained');
 });
 
 test('notifications fire for new or changed saved tokens only after a successful write', async t => {
@@ -250,17 +246,19 @@ test('notifications fire for new or changed saved tokens only after a successful
  assert.equal(notices.length,2);
 });
 
-test('legacy encrypted backups import with a seven-day expiry', async t => {
+test('legacy encrypted backups continue to work without automatic expiry', async t => {
  const { randomBytes, createCipheriv, scryptSync } = await import('node:crypto');
  let time=2000000000; const week=7*24*60*60*1000;
  const {request}=await fixture(t,{now:()=>time});
  const salt=randomBytes(16),iv=randomBytes(12);
  const cipher=createCipheriv('aes-256-gcm',scryptSync(password,salt,32),iv);
  cipher.setAAD(Buffer.from('relay-vault-v1'));
- const bytes=Buffer.concat([cipher.update(JSON.stringify([{id:'7',name:'Legacy bot',token:'synthetic-legacy'}])),cipher.final()]);
+ const bytes=Buffer.concat([cipher.update(JSON.stringify([{id:'7',name:'Legacy bot',token:'synthetic-legacy'},{id:'8',name:'Prior draft bot',token:'synthetic-expired',expiresAt:42}])),cipher.final()]);
  const backup={version:1,salt:salt.toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:bytes.toString('base64')};
- assert.equal((await request('/import','POST',{backup})).data.count,1);
+ assert.equal((await request('/import','POST',{backup})).data.count,2);
  assert.equal((await request('/reveal','POST',{id:'7'})).data.token,'synthetic-legacy');
- time+=week;
- assert.equal((await request('/reveal','POST',{id:'7'})).status,404);
+ assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'synthetic-expired');
+ time+=52*week;
+ assert.equal((await request('/reveal','POST',{id:'7'})).data.token,'synthetic-legacy');
+ assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'synthetic-expired');
 });

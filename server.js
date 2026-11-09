@@ -18,8 +18,7 @@ const vaultStore = process.env.VAULT_DATABASE_URL === undefined ? undefined : aw
 const notifyNewToken = createEmailNotifier({ apiKey: process.env.RESEND_API_KEY, from: process.env.RELAY_EMAIL_FROM, to: process.env.RELAY_EMAIL_TO });
 const vault = createVaultRouter({ ...(vaultStore ? { store: vaultStore } : {}), notifyNewToken });
 // Verify database access/decryption before accepting traffic; never fall back to an empty file.
-if (vaultStore) await vault.pruneExpired();
-else await vault.pruneExpired().catch(() => console.error('Could not clean up expired vault entries.'));
+if (vaultStore) await vault.verifyStorage();
 app.use('/api/vault', vault);
 app.use('/secret', (_req, res) => res.sendStatus(404));
 // The public connect endpoint is mounted on the vault router; other Discord calls stay fixed-host.
@@ -32,13 +31,10 @@ if (process.env.NODE_ENV === 'production' && existsSync('dist/index.html')) {
   app.use(vite.middlewares);
 }
 const port = Number(process.env.PORT || 3000);
-const expiryTimer = setInterval(() => vault.pruneExpired().catch(() => console.error('Could not clean up expired vault entries.')), 15 * 60 * 1000);
-expiryTimer.unref();
 const server = app.listen(port, '0.0.0.0', () => console.log(`Relay running on http://0.0.0.0:${port}`));
 const stop = () => server.close();
 process.once('SIGTERM', stop);
 process.once('SIGINT', stop);
 server.once('close', () => {
-  clearInterval(expiryTimer);
   vaultStore?.close().catch(() => console.error('Could not close the vault database.'));
 });

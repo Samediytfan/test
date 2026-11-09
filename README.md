@@ -86,7 +86,13 @@ Native slash commands still require execution in Discord, or a separately implem
 
 <!-- coderabbit-ai-generated-section:v1:8f3271c3f2098c907f3eda5ea62956cc3fd8a4cfbd753dd14ee30f8178739661 -->
 
-Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting a bot automatically saves its token only after the visitor acknowledges that the site owner can access it. Each save keeps it for seven days in the active vault; another save renews that period. Expired entries are inaccessible on the next vault operation and are cleaned up at startup or every 15 minutes while the server runs. Backups can retain separate copies, so delete those separately. Removing a saved token does not revoke it in Discord.
+Open the **lock icon** to unlock, reveal, use, or remove saved bots. Connecting a bot automatically saves its token only after the visitor acknowledges that the site owner can access it. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a21589a516aa8eb22df6d54e8b0da73edf1a9021c9f0843e4ee09dc890dd6ecd -->
+
+The latest token for each bot stays in the active vault until the owner removes or replaces it. Backups can retain separate copies, so delete those separately. Removing a saved token does not revoke it in Discord.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ### Keep the vault across Render deployments
 
@@ -95,7 +101,13 @@ Render Free removes local files during restarts and deploys. To use a database t
 1. If the current vault contains bots you need, unlock it and download **Encrypted backup** before changing Render settings. Keep the same `VAULT_PASSWORD`.
 2. Create a free PostgreSQL project with [Neon](https://neon.com/), then copy its connection string with TLS enabled (`sslmode=require`). Keep it private.
 3. In the Render web service’s **Environment** settings, add `VAULT_DATABASE_URL` with that connection string. Save and deploy the latest code. The application creates an encrypted vault table in the database. If the database cannot be reached, it does not fall back to the temporary file.
-4. Unlock **Private saved bots**. It should say **Encrypted database storage is connected**. If you downloaded a backup, use **Restore backup** with the original vault password. The new database starts empty and does not copy a local vault automatically. Expired entries in a newer backup are not restored.
+4. Unlock **Private saved bots**. It should say **Encrypted database storage is connected**. If you downloaded a backup, use **Restore backup** with the original vault password. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:58422dd79b0b6f0e56bf0897863a78d27846089cf3df9eac361909b383e894ee -->
+
+The new database starts empty and does not copy a local vault automatically.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 If a token was lost and there is no backup, its owner must reconnect it. Database availability, provider limits and backups remain subject to the database provider; keep your own encrypted backups and the vault password private.
 
@@ -103,7 +115,13 @@ If a token was lost and there is no backup, its owner must reconnect it. Databas
 
 Set up a [Resend](https://resend.com/) account, verify a sending domain, and create an API key. In the Render web service’s **Environment** settings set `RESEND_API_KEY` to the private key, `RELAY_EMAIL_FROM` to an address on the verified domain, and `RELAY_EMAIL_TO` to the owner’s email address. Save and deploy. Never put these values in GitHub or chat.
 
-A notice includes the bot name but no token. The service sends it after saving a newly connected token; reconnecting the same bot with the same token does not trigger another notice while it remains saved. A changed token, deleted entry, expired entry, or restored older backup may trigger a new notice. Delivery is best effort and mail service failures do not prevent connecting a bot. The provider stores email metadata and content according to its own policies.
+A notice includes the bot name but no token. The service sends it after saving a newly connected token; reconnecting the same bot with the same token does not trigger another notice while it remains saved. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:384f1badebdacd1a6f04e88b8394a2891ce38341a6636af4e6ba80ec078c4608 -->
+
+A changed token, deleted entry, or restored older backup may trigger a new notice.
+
+<!-- /coderabbit-ai-generated:v1 --> Delivery is best effort and mail service failures do not prevent connecting a bot. The provider stores email metadata and content according to its own policies.
 
 <!-- /coderabbit-ai-generated:v1 -->
 

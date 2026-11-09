@@ -12,15 +12,17 @@ test('database persists encrypted saves across instances and serializes concurre
  await admin.query('DROP TABLE IF EXISTS relay_vault');
  const a=await createPostgresVaultStore(url), b=await createPostgresVaultStore(url);
  t.after(async()=>{await a.close();await b.close();await admin.query('DROP TABLE IF EXISTS relay_vault');await admin.end();});
+ let time=1000000000;
  const app=express();app.use(express.json());
  const fetchImpl=async (endpoint,init)=>({ok:true,json:async()=>endpoint.endsWith('/guilds')?[]:{id:init.headers.Authorization.endsWith('one')?'1':'2',username:'Bot',bot:true}});
- for(const [path,store] of [['/a',a],['/b',b]])app.use(path,createVaultRouter({password:'synthetic-long-test-password',store,fetchImpl,budgets:createDiscordBudgets()}));
+ for(const [path,store] of [['/a',a],['/b',b]])app.use(path,createVaultRouter({password:'synthetic-long-test-password',store,fetchImpl,now:()=>time,budgets:createDiscordBudgets()}));
  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
  t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base=`http://127.0.0.1:${server.address().port}`;
  const connect=(path,token)=>fetch(base+path+'/connect',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,acknowledgeOwnerAccess:true})});
  const results=await Promise.all([connect('/a','synthetic-one'),connect('/b','synthetic-two')]);
  assert.ok(results.every(r=>r.status===200));
+ time+=52*7*24*60*60*1000;
  const view=await fetch(base+'/b',{headers:{Authorization:'Bearer synthetic-long-test-password'}});
  assert.deepEqual((await view.json()).map(b=>b.id).sort(),['1','2']);
  const row=await admin.query('SELECT envelope::text AS value FROM relay_vault WHERE id=1');
