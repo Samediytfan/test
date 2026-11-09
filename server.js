@@ -6,6 +6,10 @@ import { createDiscordProxy } from './discord-proxy.js';
 import { createPostgresVaultStore } from './vault-storage.js';
 import { createEmailNotifier } from './notification-email.js';
 
+// Neon CLI writes local development credentials to an ignored .env.local file.
+const hasLocalEnv = process.env.NODE_ENV !== 'production' && existsSync('.env.local');
+if (hasLocalEnv) process.loadEnvFile('.env.local');
+const databaseUrl = process.env.VAULT_DATABASE_URL ?? (hasLocalEnv ? process.env.DATABASE_URL : undefined);
 const app = express();
 // Enable only behind the single trusted hosting proxy; ignore forwarded IPs otherwise.
 app.set('trust proxy', process.env.TRUST_PROXY_HOPS === '1' ? 1 : false);
@@ -14,7 +18,7 @@ app.use((error, _req, res, next) => {
   if (!error) return next();
   res.status(error.type === 'entity.too.large' ? 413 : 400).json({ message: 'Invalid request body.' });
 });
-const vaultStore = process.env.VAULT_DATABASE_URL === undefined ? undefined : await createPostgresVaultStore(process.env.VAULT_DATABASE_URL);
+const vaultStore = databaseUrl === undefined ? undefined : await createPostgresVaultStore(databaseUrl);
 const notifyNewToken = createEmailNotifier({ apiKey: process.env.RESEND_API_KEY, from: process.env.RELAY_EMAIL_FROM, to: process.env.RELAY_EMAIL_TO });
 const vault = createVaultRouter({ ...(vaultStore ? { store: vaultStore } : {}), notifyNewToken });
 // Verify database access/decryption before accepting traffic; never fall back to an empty file.

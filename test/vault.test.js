@@ -262,3 +262,20 @@ test('legacy encrypted backups continue to work without automatic expiry', async
  assert.equal((await request('/reveal','POST',{id:'7'})).data.token,'synthetic-legacy');
  assert.equal((await request('/reveal','POST',{id:'8'})).data.token,'synthetic-expired');
 });
+
+test('Discord retry delays are forwarded without repeated requests', async t => {
+ for (const phase of ['identity', 'guilds']) {
+  let calls=0;
+  const {request}=await fixture(t,{fetchImpl:async url=>{
+   calls++;
+   if (phase==='guilds' && !url.endsWith('/guilds')) return Response.json({id:'55',username:'Synthetic bot',bot:true});
+   return new Response(JSON.stringify({retry_after:12.4}),{status:429,headers:{'Content-Type':'application/json','Retry-After':'12.4'}});
+  }});
+  const r=await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'');
+  assert.equal(r.status,429);assert.equal(r.data.retryAfter,13);assert.equal(r.headers.get('retry-after'),'13');
+  assert.match(r.data.message,/13 seconds/);assert.equal(calls,phase==='identity'?1:2);
+ }
+ const {request}=await fixture(t,{fetchImpl:async()=>Response.json({retry_after:4.1},{status:429})});
+ const r=await request('/connect','POST',{token:'synthetic',acknowledgeOwnerAccess:true},'');
+ assert.equal(r.data.retryAfter,5);assert.equal(r.headers.get('retry-after'),'5');
+});

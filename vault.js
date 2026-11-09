@@ -10,6 +10,18 @@ function verificationFailure(status) {
   if (status === 429) return { status: 429, data: { message: 'Discord is rate limiting connections. Please try again later.' } };
   return { status: 502, data: { message: 'Discord could not verify the bot right now. Please try again later.' } };
 }
+async function rateLimited(response, res) {
+  let seconds = Number(response.headers?.get('retry-after')) || 0;
+  if (!seconds && typeof response.json === 'function') {
+    try { seconds = Number((await response.json())?.retry_after) || 0; } catch { /* Discord may return a non-JSON response. */ }
+  }
+  if (Number.isFinite(seconds) && seconds > 0) {
+    seconds = Math.min(86400, Math.ceil(seconds));
+    res.set('Retry-After', String(seconds));
+    return res.status(429).json({ message: `Discord is rate limiting connections. Please wait ${seconds} seconds before trying again.`, retryAfter: seconds });
+  }
+  return res.status(429).json({ message: 'Discord is rate limiting connections. Please wait before trying again.' });
+}
 function encrypt(bots, password) {
   const salt = randomBytes(16), iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', scryptSync(password, salt, 32), iv);
@@ -73,13 +85,14 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
       const headers = { Authorization: `Bot ${token}` };
       const response = await fetchImpl('https://discord.com/api/v10/users/@me', { headers, signal: AbortSignal.timeout(15000) });
       if (response.status === 401) budgets.invalidate(token);
+      if (response.status === 429) return rateLimited(response, res);
       if (!response.ok) { const failure = verificationFailure(response.status); return res.status(failure.status).json(failure.data); }
       user = await response.json();
       if (!user.bot || !/^\d{1,32}$/.test(user.id) || typeof user.username !== 'string') return res.status(400).json({ message: 'Only bot accounts can be connected.' });
       const guildResponse = await fetchImpl('https://discord.com/api/v10/users/@me/guilds', { headers, signal: AbortSignal.timeout(15000) });
       if (guildResponse.status === 401) budgets.invalidate(token);
       if (guildResponse.status === 401) return res.status(401).json({ message: 'Discord rejected this bot token. Check that it is the current bot token in the Discord Developer Portal.' });
-      if (guildResponse.status === 429) return res.status(429).json({ message: 'Discord is rate limiting connections. Please try again later.' });
+      if (guildResponse.status === 429) return rateLimited(guildResponse, res);
       if (!guildResponse.ok) return res.status(502).json({ message: 'Discord could not load the bot’s servers. Please try again.' });
       guilds = await guildResponse.json();
       if (!Array.isArray(guilds)) throw new Error('Invalid Discord response');

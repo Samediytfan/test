@@ -109,7 +109,13 @@ The new database starts empty and does not copy a local vault automatically.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
-If a token was lost and there is no backup, its owner must reconnect it. Database availability, provider limits and backups remain subject to the database provider; keep your own encrypted backups and the vault password private.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e770e38d2df0254d8b4102ee10f6bdc9fa4876e9e66beae31c40a77d5f3dc311 -->
+
+For local development, Neon CLI can write a private `.env.local`; Relay reads its `DATABASE_URL` when `VAULT_DATABASE_URL` is not already set. On Render, set `VAULT_DATABASE_URL` directly. Do not commit or share connection strings. If a token was lost and there is no backup, its owner must reconnect it.
+
+<!-- /coderabbit-ai-generated:v1 --> Database availability, provider limits and backups remain subject to the database provider; keep your own encrypted backups and the vault password private.
 
 ### Optional email notices
 
