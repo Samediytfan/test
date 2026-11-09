@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.*
+
+# Private encrypted vault and atomic write files
+/secret/
