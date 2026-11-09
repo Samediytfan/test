@@ -162,3 +162,30 @@ test('role lookup rejection returns intervening Gateway roles to all pending cal
   assert.deepEqual(await cache.get('guild',load),roles);assert.equal(calls,1);
  }
 });
+
+test('proxy allows only encoded Discord own-reaction routes',()=>{
+ for(const emoji of ['😀','👍🏽','#️⃣','1️⃣','party_parrot:123']) {
+  const path=`/channels/1/messages/2/reactions/${encodeURIComponent(emoji)}/@me`;
+  assert.equal(isAllowedDiscordRequest(path,'PUT'),true,emoji);
+  assert.equal(isAllowedDiscordRequest(path,'DELETE'),true,emoji);
+  assert.equal(isAllowedDiscordRequest(path,'GET'),false,emoji);
+ }
+ for(const path of ['/channels/1/messages/2/reactions/%2F/@me','/channels/1/messages/2/reactions/..%2Fother/@me','/channels/1/messages/2/reactions/%252F/@me','/channels/1/messages/2/reactions/%E0%ZZ/@me','/channels/1/messages/2/reactions/abc/@me','/channels/1/messages/2/reactions/%F0%9F%98%80/3','/channels/1/messages/2/reactions/%F0%9F%98%80/@me?x=1'])assert.equal(isAllowedDiscordRequest(path,'PUT'),false,path);
+});
+
+test('proxy forwards reaction writes and rejects encoded path injection', async t=>{
+ const express=(await import('express')).default;
+ const {createDiscordProxy}=await import('../discord-proxy.js');
+ const forwarded=[];const app=express();app.use(express.json());
+ app.post('/api/discord',createDiscordProxy(async(url,init)=>{forwarded.push({url,method:init.method});return new Response(null,{status:204})}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const base=`http://127.0.0.1:${server.address().port}/api/discord`;
+ const request=(path,method)=>fetch(base,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:'synthetic',path,method})});
+ const path=`/channels/1/messages/2/reactions/${encodeURIComponent('👍🏽')}/@me`;
+ assert.equal((await request(path,'PUT')).status,204);
+ assert.equal((await request(path,'DELETE')).status,204);
+ assert.deepEqual(forwarded.map(x=>x.method),['PUT','DELETE']);
+ assert.equal(forwarded[0].url,`https://discord.com/api/v10${path}`);
+ assert.equal((await request('/channels/1/messages/2/reactions/%2F/@me','PUT')).status,400);
+ assert.equal(forwarded.length,2);
+});

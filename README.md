@@ -193,7 +193,25 @@ The bot must already be in the server with the permissions needed for your actio
 - **Roles:** Open **Manage roles** to create or delete roles, change names, primary colors, role emoji, permissions, display and mention settings, adjust order, and assign or remove roles for members. Discord enforces the bot’s own permissions and role hierarchy. Integration-managed roles are read-only; the @everyone role’s permissions can be edited but it cannot be renamed, deleted, moved, or assigned manually.
 - **Onboarding:** Open the server dropdown and select **Server onboarding** to manage default channels, questions, answers, emoji, and role/channel choices. This requires a Community server and the Manage Server and Manage Roles permissions. Discord validates its channel requirements when enabling onboarding.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:6b1233a8bd108fde8ec8665fd73136807e425d2f3c387661a373d3542a587d1f -->
+
+## Reactions and embeds
+
+Each server or DM message has an **Add reaction** button with a Unicode emoji picker. Click an existing reaction to add or remove the bot’s own reaction; existing custom emoji reactions can be selected too. Adding a new emoji may require Discord’s Add Reactions permission, and viewing messages requires Read Message History. The picker does not list server-specific custom emojis that are not already on the message.
+
+Messages display embed titles, descriptions, fields, images, author, footer, and safe links. Video embeds provide a link to open the video. <!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:dd3b194f00b0e700b6a304dda4b91163c0b4abde9ea4c38748ac99bfd12c3b07 -->
+
+Discord may omit embed content when the bot does not have the Message Content privileged intent. Discord’s full embed Markdown and interactive components are not reproduced.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Command and mention suggestions
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 Type **@** in the message box to filter members and roles. Suggestions can be selected with a click, the arrow keys and Enter, or Tab. Member search queries Discord when connected, so it can find people outside the initially loaded list (up to 1,000 members). Discord permissions and intents still apply.
 

@@ -17,6 +17,15 @@ export function isAllowedDiscordRequest(path, method) {
   if (typeof path !== 'string' || path.length > 2000 || /[#\\]/.test(path)) return false;
   const [pathname, ...query] = path.split('?');
   if (query.length > 1) return false;
+  const reaction = pathname.match(/^\/channels\/\d+\/messages\/\d+\/reactions\/([^/]+)\/@me$/);
+  if (reaction) {
+    if (query.length || !['PUT', 'DELETE'].includes(method)) return false;
+    try {
+      const emoji = decodeURIComponent(reaction[1]);
+      if (emoji.length > 64 || encodeURIComponent(emoji) !== reaction[1]) return false;
+      return /^[A-Za-z0-9_]{1,32}:\d{1,32}$/.test(emoji) || (/\p{Emoji}/u.test(emoji) && /^[\p{Emoji}\u200d\ufe0e\ufe0f\u20e3\u{e0020}-\u{e007f}]+$/u.test(emoji));
+    } catch { return false; }
+  }
   const rule = rules.find(r => r.path.test(pathname) && r.methods.includes(method));
   if (!rule) return false;
   if (query.length && method !== 'GET') return false;
