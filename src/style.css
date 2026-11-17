@@ -24,3 +24,4 @@
 
 .id-copy-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:13px}
 .id-copy-row code{user-select:all;font-family:monospace}
+.find-user{padding:0 8px 10px}.find-user-form{display:flex;gap:6px}.find-user-form .modal-input{height:34px;font-size:12px}.find-user-form .secondary-button{padding:8px 12px}.find-user-result{display:flex;flex-direction:column;gap:3px;background:#2b2d31;border-radius:6px;padding:10px;margin-top:8px;font-size:12px;color:#c8cad2;word-break:break-all}.find-user-result span{color:#9698a2}.find-user-actions{display:flex;gap:6px;margin-top:6px}.find-user-actions button{padding:7px 10px;font-size:12px}
