@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: relay-discord-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: ">=24.0.0 <25.0.0"
+      - key: NODE_ENV
+        value: production
+      - key: VAULT_PASSWORD
+        generateValue: true
+      - key: TRUST_PROXY_HOPS
+        value: "1"
