@@ -21,3 +21,6 @@
 
 .id-chip{margin-left:6px;font-size:11px;opacity:.7;font-family:monospace;user-select:all}
 .role-id code{user-select:all}
+
+.id-copy-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:13px}
+.id-copy-row code{user-select:all;font-family:monospace}
