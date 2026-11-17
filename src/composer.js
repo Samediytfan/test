@@ -2,6 +2,10 @@ export function mentionTrigger(text, cursor=text.length) {
   const match=text.slice(0,cursor).match(/(?:^|\s)@([^@\s]*)$/);
   return match?{start:cursor-match[1].length-1,query:match[1]}:null;
 }
+export function channelTrigger(text, cursor=text.length) {
+  const match=text.slice(0,cursor).match(/(?:^|\s)#([^#\s]*)$/);
+  return match?{start:cursor-match[1].length-1,query:match[1]}:null;
+}
 export function replaceMention(text,cursor,start,mention) {
   const rest=text.slice(cursor).replace(/^[^\s]*/, '');
   return text.slice(0,start)+mention+' '+rest.replace(/^ /,'');
