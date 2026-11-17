@@ -25,3 +25,11 @@
 .id-copy-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:13px}
 .id-copy-row code{user-select:all;font-family:monospace}
 .find-user{padding:0 8px 10px}.find-user-form{display:flex;gap:6px}.find-user-form .modal-input{height:34px;font-size:12px}.find-user-form .secondary-button{padding:8px 12px}.find-user-result{display:flex;flex-direction:column;gap:3px;background:#2b2d31;border-radius:6px;padding:10px;margin-top:8px;font-size:12px;color:#c8cad2;word-break:break-all}.find-user-result span{color:#9698a2}.find-user-actions{display:flex;gap:6px;margin-top:6px}.find-user-actions button{padding:7px 10px;font-size:12px}
+
+.mention-log{margin:6px 8px;padding:6px;border-radius:8px;background:rgba(0,0,0,.25);max-height:220px;overflow-y:auto}
+.mention-log-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 4px 6px}
+.mention-log-head button{background:none;border:0;color:inherit;opacity:.7;cursor:pointer;font-size:12px}
+.mention-item{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;background:none;border:0;color:inherit;padding:5px 6px;border-radius:6px;cursor:pointer}
+.mention-item:hover{background:rgba(255,255,255,.06)}
+.mention-item span{font-size:13px;font-weight:600}
+.mention-item small{opacity:.75;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
