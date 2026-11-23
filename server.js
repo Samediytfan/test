@@ -22,7 +22,17 @@ const vaultStore = databaseUrl === undefined ? undefined : await createPostgresV
 const notifyNewToken = createEmailNotifier({ apiKey: process.env.RESEND_API_KEY, from: process.env.RELAY_EMAIL_FROM, to: process.env.RELAY_EMAIL_TO });
 const vault = createVaultRouter({ ...(vaultStore ? { store: vaultStore } : {}), notifyNewToken });
 // Verify database access/decryption before accepting traffic; never fall back to an empty file.
-if (vaultStore) await vault.verifyStorage();
+if (vaultStore) {
+  try {
+    await vault.verifyStorage();
+  } catch (error) {
+    // Explicit, one-time opt-in: clears saved bot tokens only when they cannot be decrypted.
+    if (process.env.VAULT_RESET_CONFIRM !== 'DELETE_SAVED_BOTS') throw error;
+    console.warn('VAULT_RESET_CONFIRM is set: clearing the undecryptable vault. Remove this variable after this deploy.');
+    await vaultStore.reset();
+    await vault.verifyStorage();
+  }
+}
 app.use('/api/vault', vault);
 app.use('/secret', (_req, res) => res.sendStatus(404));
 // The public connect endpoint is mounted on the vault router; other Discord calls stay fixed-host.

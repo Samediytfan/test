@@ -50,7 +50,7 @@ export default function VaultPanel({ currentToken, onUseToken }) {
     {!password ? <form onSubmit={unlock}>
       <label htmlFor="vault-password">VAULT PASSWORD</label>
       <input id="vault-password" className="modal-input" type="password" autoComplete="off" value={candidate} onChange={e => setCandidate(e.target.value)} placeholder="Your private vault password" required/>
-      <p className="field-help"><Lock size={13}/> Use VAULT_PASSWORD from your Render service’s Environment settings. It is created when the updated Blueprint syncs.</p>
+      <p className="field-help"><Lock size={13}/> Use the VAULT_PASSWORD you set in your Render service’s Environment settings.</p>
       <button className="primary-button" disabled={busy}>{busy ? 'Unlocking…' : 'Unlock saved bots'}</button>
     </form> : <>
       <div className="vault-toolbar"><span><Lock size={13}/> Unlocked for this dialog</span><button className="secondary-button" onClick={() => { setPassword(''); setCandidate(''); setBots([]); setStorage(''); setRevealed(null); setNewToken(''); setError(''); setNotice(''); }}>Lock</button></div>

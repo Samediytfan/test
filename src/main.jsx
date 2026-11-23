@@ -1,20 +1,20 @@
 import { createBotRoleCache } from './bot-role-cache.js';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Hash, Volume2, ChevronDown, ChevronRight, Plus, Compass, Search, Inbox, HelpCircle, Users, Pin, Bell, AtSign, Gift, Sticker, Smile, Send, Settings, Mic, Headphones, Shield, X, LogOut, Check, Sparkles, MoreHorizontal, Pencil, Trash2, Link2, PanelRightClose, Menu, CircleHelp, Lock, Crown, ArrowRight, Bot, Copy, MessageSquare, Ban, Clock, AlertCircle } from 'lucide-react';
 import './style.css';
-import VaultPanel from './VaultPanel.jsx';
+const VaultPanel=React.lazy(()=>import('./VaultPanel.jsx'));
 import Avatar from './Avatar.jsx';
-import MemberActions from './MemberActions.jsx';
+const MemberActions=React.lazy(()=>import('./MemberActions.jsx'));
 import FindUser from './FindUser.jsx';
 import DirectMessages from './DirectMessages.jsx';
 import { isBotMention, isDirectMessage, upsertConversation, validConversation } from './notifications.js';
 import usePresence from './usePresence.js';
 import { profileImages } from './avatar.js';
-import ChannelPermissions from './ChannelPermissions.jsx';
-import RoleManager from './RoleManager.jsx';
-import OnboardingPanel from './OnboardingPanel.jsx';
-import CommandSettings from './CommandSettings.jsx';
+const ChannelPermissions=React.lazy(()=>import('./ChannelPermissions.jsx'));
+const RoleManager=React.lazy(()=>import('./RoleManager.jsx'));
+const OnboardingPanel=React.lazy(()=>import('./OnboardingPanel.jsx'));
+const CommandSettings=React.lazy(()=>import('./CommandSettings.jsx'));
 import ChatComposer from './ChatComposer.jsx';
 import MessageExtras from './MessageExtras.jsx';
 import { flattenCommands, validShortcut } from './composer.js';
@@ -118,7 +118,7 @@ function App(){
  const renderContent=(content)=>{const parts=content.split(/(<@!?\d+>|<@&\d+>|@[\w-]+|#[\w-]+)/g);return parts.map((part,i)=>{if(part.startsWith('<@&')){const r=roles.find(x=>x.id===part.slice(3,-1));return <span className="mention-text" key={i}>@{r?.name||'role'}</span>}if(part.startsWith('<@')){const m=members.find(x=>x.id===part.replace(/\D/g,''));return <span className="mention-text" key={i}>@{m?.name||'user'}</span>}return part[0]==='@'||part[0]==='#'?<span className="mention-text" key={i}>{part}</span>:part})};
  return <div className="app-shell">
   <aside className="server-rail"><button className="home-server" title="Direct messages" onClick={openDMInbox}><DiscordMark/>{dmCount>0&&<i className="red-badge rail-badge" aria-label={`${dmCount} unread direct messages`}>{dmCount>99?'99+':dmCount}</i>}</button><div className="rail-line"/>{guilds.map((g,i)=><button key={g.id} className={'server-icon '+(!inboxOpen&&guild?.id===g.id?'selected':'')+' server-'+i} title={g.name} onClick={()=>selectGuild(g)}>{Object.values(unreadMentions).some(n=>n.guild===g.id)&&<i className="red-badge rail-badge" aria-label="Unread mentions">{Object.values(unreadMentions).filter(n=>n.guild===g.id).reduce((sum,n)=>sum+n.count,0)}</i>}{g.icon?<img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`}/>:i===0?<span>☕</span>:i===1?<span>✿</span>:<span>🌱</span>}</button>)}<button className="rail-add" title="Connect a bot" onClick={()=>open('connect')}><Plus size={24}/></button><button className="rail-explore" title="Private saved bots" onClick={()=>open('vault')}><Lock size={21}/></button><button className="rail-explore" title="About Relay" onClick={()=>open('about')}><Compass size={23}/></button></aside>
-  {inboxOpen?<DirectMessages conversations={dmList} selected={selectedDM} onSelect={selectDM} onBack={()=>setInboxOpen(false)} unread={unreadDM} api={api} bot={bot} demo={demo} incoming={incomingDM}/>:<>
+  {inboxOpen?<DirectMessages conversations={dmList} selected={selectedDM} onSelect={selectDM} onBack={()=>setInboxOpen(false)} unread={unreadDM} api={api} bot={bot} demo={demo} incoming={incomingDM} guildId={guild?.id} onStart={(dm,user)=>{if(!demo)remember(dm.id,user);selectDM(dm.id)}}/>:<>
   <aside className={'channel-sidebar '+(mobileNav?'mobile-open':'')}><IconButton title="Close channels" className="mobile-close" onClick={()=>setMobileNav(false)}><X size={18}/></IconButton><button className="server-header" onClick={()=>setMenu(menu==='server'?null:'server')}><span>{guild?.name||'Your servers'}</span><ChevronDown size={18}/></button>{menu==='server'&&<div className="popup server-popup"><button onClick={()=>open('createChannel')}><Plus size={15}/> Create channel</button><button onClick={()=>open('roles')}><Shield size={15}/> Manage roles</button><button onClick={()=>open('onboarding')}><Users size={15}/> Server onboarding</button><button onClick={showCommands}><Hash size={15}/> Commands & shortcuts</button>{!demo&&<button onClick={()=>{setLiveStatus(v=>!v);setMenu(null)}}><Users size={15}/>{liveStatus?'Disconnect':'Enable'} live status</button>}<button onClick={()=>open('connect')}><Bot size={15}/> Connect a bot</button></div>}
    {!demo&&mentionLog.length>0&&<div className="mention-log" role="region" aria-label="Recent mentions"><div className="mention-log-head"><strong>Mentions</strong><button onClick={()=>setMentionLog([])}>Clear</button></div>{mentionLog.slice(0,8).map(item=>{const g=guilds.find(x=>x.id===item.guild);const c=channels.find(x=>x.id===item.channel);return <button key={item.id} className="mention-item" onClick={()=>{if(g&&g.id!==guild?.id)selectGuild(g);const target=channels.find(x=>x.id===item.channel);if(target){setChannel(target);clearMention(item.channel)}setInboxOpen(false)}}><span>#{c?.name||'channel'} · {g?.name||'server'}</span><small>{item.author}: {item.content}</small></button>})}</div>}<div className="channel-scroll"><div className="server-welcome"><span className="sparkle-icon">✦</span><span>YOUR LITTLE CORNER OF DISCORD</span></div>{groups.map(group=><div className="channel-group" key={group}><div className="group-heading"><button onClick={()=>setCollapsed(p=>({...p,[group]:!p[group]}))}>{collapsed[group]?<ChevronRight size={13}/>:<ChevronDown size={13}/>}<span>{group}</span></button><IconButton title="Create channel" onClick={()=>open('createChannel')}><Plus size={16}/></IconButton></div>{!collapsed[group]&&channels.filter(c=>(c.group||'CHANNELS')===group).map(c=><button key={c.id} className={'channel-row '+(channel?.id===c.id?'active':'')} onClick={()=>{setChannel(c);clearMention(c.id);setSearch('');setMobileNav(false)}} onDoubleClick={()=>setShownChannelId(id=>id===c.id?null:c.id)}>{[2,13].includes(c.type)?<Volume2 size={19}/>:<Hash size={20}/>}<span>{c.name}{shownChannelId===c.id&&<small className="id-chip">ID: {c.id}</small>}</span>{unreadMentions[c.id]&&<i title={'Latest ping: '+(unreadMentions[c.id].last||'')} className="red-badge channel-badge" aria-label={`${unreadMentions[c.id].count} unread mentions`}>{unreadMentions[c.id].count}</i>}</button>)}</div>)}<button className="manage-roles" onClick={()=>open('roles')}><Shield size={16}/><span>Manage roles</span><ChevronRight size={15}/></button></div>
    <div className="account-bar"><Avatar person={{...bot,status:'online'}} size="small"/><div className="account-name"><strong>{bot.name}</strong><span>{demo?'In demo mode':'Connected as bot'}</span></div><IconButton title="Bot settings" onClick={()=>open('connect')}><Settings size={18}/></IconButton></div></aside>
@@ -146,4 +146,4 @@ function App(){
  </div>
 }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<Suspense fallback={null}><App/></Suspense>);

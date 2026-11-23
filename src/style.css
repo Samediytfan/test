@@ -33,3 +33,10 @@
 .mention-item:hover{background:rgba(255,255,255,.06)}
 .mention-item span{font-size:13px;font-weight:600}
 .mention-item small{opacity:.75;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+/* New DM entry in the Direct Messages sidebar */
+.dm-new{display:flex;gap:6px;margin:8px 0 10px}
+.dm-new input{flex:1;min-width:0;background:#1e1f22;color:#dbdee1;border:0;border-radius:4px;padding:8px 10px;font:inherit;font-size:14px}
+.dm-new input::placeholder{color:#949ba4}
+.dm-new button{background:#5865f2;color:#fff;border:0;border-radius:4px;padding:0 12px;font-weight:600;cursor:pointer}
+.dm-new button:disabled{opacity:.5;cursor:default}

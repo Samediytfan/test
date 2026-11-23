@@ -7,7 +7,7 @@
     "dev": "node server.js",
     "build": "vite build",
     "preview": "node server.js",
-    "test": "node --test"
+    "test": "node --test test/"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

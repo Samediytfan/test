@@ -42,6 +42,8 @@ export async function createPostgresVaultStore(connectionString) {
   return {
     kind: 'postgres',
     close: () => pool.end(),
+    // Only used by the guarded one-time reset in server.js (VAULT_RESET_CONFIRM).
+    reset: () => pool.query('UPDATE relay_vault SET envelope = NULL WHERE id = 1'),
     async transaction(fn) {
       const client = await pool.connect();
       try {

@@ -11,6 +11,6 @@ services:
       - key: NODE_ENV
         value: production
       - key: VAULT_PASSWORD
-        generateValue: true
+        sync: false
       - key: TRUST_PROXY_HOPS
         value: "1"

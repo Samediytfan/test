@@ -46,7 +46,7 @@ function decrypt(envelope, password) {
 export function createVaultRouter({ password = process.env.VAULT_PASSWORD, filePath = process.env.VAULT_FILE || resolve('secret/bots.enc.json'), store = createFileVaultStore(filePath), fetchImpl = fetch, notifyNewToken = async () => {}, budgets = discordBudgets, connectLimit = budgets.connect, now = Date.now, authClientCapacity = 1024 } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  const enabled = typeof password === 'string' && password.length >= 16;
+  const enabled = typeof password === 'string' && password.length >= 1;
   const hash = value => createHash('sha256').update(value).digest();
   const attempts = new Map();
   let queue = Promise.resolve();
@@ -115,7 +115,7 @@ export function createVaultRouter({ password = process.env.VAULT_PASSWORD, fileP
   });
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
-    if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to a unique password of at least 16 characters in your hosting environment.' });
+    if (!enabled) return res.status(503).json({ message: 'Saved bots are disabled. Set VAULT_PASSWORD to any password you choose in your hosting environment.' });
     const time = now(), id = clientId(req);
     // Windows have fixed lifetimes and insertion order; cleanup is capped per request.
     let cleaned = 0;

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import EmojiPicker from 'emoji-picker-react';
+import React, { Suspense, useEffect, useState } from 'react';
+const EmojiPicker=React.lazy(()=>import('emoji-picker-react'));
+const EmojiPickerLazy=props=><Suspense fallback={null}><EmojiPicker {...props}/></Suspense>;
 import { Smile } from 'lucide-react';
 
 function safeUrl(value) {
@@ -50,7 +51,7 @@ export default function MessageExtras({ message, channelId, api, demo, onError }
  return <>
   {message.embeds?.map((embed, i)=><Embed key={i} embed={embed}/>)}
   <div className="message-reaction-wrap"><div className="reactions">{reactions.filter(reaction=>emojiKey(reaction.emoji)).map(reaction=><button key={emojiKey(reaction.emoji)} className={reaction.me?'own-reaction':''} type="button" disabled={busy} aria-label={`${reaction.me?'Remove':'Add'} reaction ${reaction.emoji?.name || 'emoji'}`} title={reaction.emoji?.name || 'emoji'} onClick={()=>toggle(reaction.emoji)}>{reaction.emoji?.id?<img src={`https://cdn.discordapp.com/emojis/${reaction.emoji.id}.${reaction.emoji.animated?'gif':'png'}?size=48`} alt=""/>:reaction.emoji?.name} <b>{reaction.count}</b></button>)}<button type="button" title="Add reaction" aria-label="Add reaction" aria-expanded={picker} disabled={busy} onClick={()=>setPicker(value=>!value)}><Smile size={14}/></button></div>
-   {picker && <div className="reaction-picker"><button type="button" className="secondary-button" onClick={()=>setPicker(false)}>Close emojis</button><EmojiPicker theme="dark" width="100%" height={360} onEmojiClick={item=>toggle({name:item.emoji,id:null})}/></div>}
+   {picker && <div className="reaction-picker"><button type="button" className="secondary-button" onClick={()=>setPicker(false)}>Close emojis</button><EmojiPickerLazy theme="dark" width="100%" height={360} onEmojiClick={item=>toggle({name:item.emoji,id:null})}/></div>}
   </div>
  </>;
 }
