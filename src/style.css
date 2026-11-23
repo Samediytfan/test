@@ -40,3 +40,4 @@
 .dm-new input::placeholder{color:#949ba4}
 .dm-new button{background:#5865f2;color:#fff;border:0;border-radius:4px;padding:0 12px;font-weight:600;cursor:pointer}
 .dm-new button:disabled{opacity:.5;cursor:default}
+.message.ping-highlight{background:rgba(240,178,50,.08);outline:2px solid #f0b232;outline-offset:-2px;border-radius:4px}

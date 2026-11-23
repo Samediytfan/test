@@ -1,6 +1,6 @@
 export function isBotMention(message, botId, botRoles = []) {
  if (!message?.guild_id || !botId || message.author?.id === botId) return false;
- return Boolean(message.mention_everyone || message.mentions?.some(user => user.id === botId) || message.mention_roles?.some(id => botRoles.includes(id)));
+ return Boolean(message.mention_everyone || message.mentions?.some(user => user.id === botId) || message.mention_roles?.some(id => botRoles.includes(id)) || message.referenced_message?.author?.id === botId);
 }
 export function isDirectMessage(message, botId) {
  return Boolean(message?.id && message.channel_id && !message.guild_id && (message.channel_type == null || message.channel_type === 1) && !(Number(message.flags || 0) & 64) && message.author?.id && message.author.id !== botId);
