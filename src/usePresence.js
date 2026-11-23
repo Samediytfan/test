@@ -7,6 +7,8 @@ export default function usePresence(token, enabled, guildId, memberIds=[], prese
  useEffect(()=>{
   setState({members:{},message:''});if(!token||!enabled)return;
   let stopped=false,socket,heartbeat,retry,seq=null,ack=true,attempts=0,requestPresence=presenceEnabled;
+   // Intent levels: 0 = members+presences, 1 = presences only, 2 = basic. Discord rejects (4014) privileged intents that aren't enabled in the portal, so step down one level at a time.
+   const INTENT_LEVELS=[4609+256+2,4609+256,4609];let level=presenceEnabled?0:2;
   const clear=()=>{clearTimeout(heartbeat);clearTimeout(retry)};
   const connect=()=>{
    if(stopped)return;
@@ -17,7 +19,7 @@ export default function usePresence(token, enabled, guildId, memberIds=[], prese
    socket.onmessage=event=>{
     if(stopped)return;let packet;try{packet=JSON.parse(event.data)}catch{return}
     if(packet.s!==null&&packet.s!==undefined)seq=packet.s;
-    if(packet.op===10){ack=true;heartbeat=setTimeout(()=>beat(packet.d.heartbeat_interval),Math.random()*packet.d.heartbeat_interval);send(2,{token,intents:4609+(requestPresence?256:0),properties:{os:'browser',browser:'Relay',device:'Relay'}})}
+    if(packet.op===10){ack=true;heartbeat=setTimeout(()=>beat(packet.d.heartbeat_interval),Math.random()*packet.d.heartbeat_interval);send(2,{token,intents:INTENT_LEVELS[level],properties:{os:'browser',browser:'Relay',device:'Relay'}})}
     if(packet.op===11)ack=true;
     if(packet.op===1)send(1,seq);
     if(packet.op===7||packet.op===9)socket.close(4000,'Reconnect requested');
@@ -32,7 +34,7 @@ export default function usePresence(token, enabled, guildId, memberIds=[], prese
    };
    socket.onclose=event=>{
     clear();if(stopped)return;
-    if(event.code===4014&&requestPresence){requestPresence=false;setState({members:{},message:'Presence Intent unavailable; reconnecting notifications…'});retry=setTimeout(connect,1000);return}
+    if(event.code===4014&&level<2){level++;requestPresence=level<2;setState({members:{},message:'Presence Intent unavailable; reconnecting notifications…'});retry=setTimeout(connect,1000);return}
     const fatal=[4004,4010,4011,4012,4013,4014].includes(event.code);
     setState({members:{},message:event.code===4014?'Enable Presence Intent in your bot’s Discord Developer Portal, then reconnect live status.':fatal?'Discord rejected live status. Check the bot configuration.':'Live status disconnected; statuses are unknown.'});
     if(!fatal&&attempts<3)retry=setTimeout(connect,5000*2**attempts++);
