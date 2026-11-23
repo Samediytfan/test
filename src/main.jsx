@@ -56,9 +56,6 @@ function App(){
  const retryRemaining=Math.max(0,Math.ceil((retryUntil-clock)/1000));
  const botRoles=useRef(createBotRoleCache());
  const [liveStatus,setLiveStatus]=useState(true);
- const [selfRoles,setSelfRoles]=useState([]);
- useEffect(()=>{setSelfRoles([]);if(demo||!token||!guild?.id)return;let active=true;api(`/guilds/${guild.id}/members/${bot.id}`).then(m=>{if(active)setSelfRoles(m.roles||[])}).catch(()=>{});return()=>{active=false}},[guild?.id,bot.id,demo,token]);
- const pingsBot=m=>Boolean(m.author?.id!==bot.id&&(m.mentions?.some(u=>u.id===bot.id)||m.mention_roles?.some(r=>selfRoles.includes(r))||m.referenced_message?.author?.id===bot.id));
  const [token,setToken]=useState(''); const [tokenInput,setTokenInput]=useState(''); const [demo,setDemo]=useState(true); const [bot,setBot]=useState({id:'bot',name:'Cosmo',bot:true});
 
  const [guilds,setGuilds]=useState(demoGuilds); const [guild,setGuild]=useState(demoGuilds[0]); const [channels,setChannels]=useState(initialChannels); const [shownChannelId,setShownChannelId]=useState(null); const [channel,setChannel]=useState(initialChannels[3]); const [roles,setRoles]=useState(initialRoles); const [members,setMembers]=useState(demoMembers.map(m=>({...m,roles:m.role==='Admin'?['r1']:m.role==='Moderator'?['r2']:['r3']}))); const [messages,setMessages]=useState(initialMessages); const [draft,setDraft]=useState(''); const [modal,setModal]=useState(null); const [form,setForm]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false); const [showMembers,setShowMembers]=useState(()=>window.innerWidth>800); const [search,setSearch]=useState(''); const [showSearch,setShowSearch]=useState(false); const [menu,setMenu]=useState(null); const [commands,setCommands]=useState([]); const [toast,setToast]=useState(''); const [collapsed,setCollapsed]=useState({}); const [mobileNav,setMobileNav]=useState(false); const endRef=useRef(null);
@@ -117,6 +114,9 @@ function App(){
  const showCommands=()=>{open('commands');loadCommands()};
  const searchMembers=async query=>(await api(`/guilds/${guild.id}/members/search?query=${encodeURIComponent(query)}&limit=25`)).map(m=>({id:m.user.id,name:m.nick||m.user.username,roles:m.roles||[],bot:m.user.bot}));
  const updateChannel=c=>{setChannel(c);setChannels(prev=>prev.map(old=>old.id===c.id?c:old))};
+ const [selfRoles,setSelfRoles]=useState([]);
+ useEffect(()=>{setSelfRoles([]);if(demo||!token||!guild?.id)return;let active=true;api(`/guilds/${guild.id}/members/${bot.id}`).then(m=>{if(active)setSelfRoles(m.roles||[])}).catch(()=>{});return()=>{active=false}},[guild?.id,bot.id,demo,token]);
+ const pingsBot=m=>Boolean(m.author?.id!==bot.id&&(m.mentions?.some(u=>u.id===bot.id)||m.mention_roles?.some(r=>selfRoles.includes(r))||m.referenced_message?.author?.id===bot.id));
  const groups=useMemo(()=>[...new Set(channels.map(c=>c.group||'CHANNELS'))],[channels]); const currentMessages=(messages[channel?.id]||[]).filter(m=>!search||m.content.toLowerCase().includes(search.toLowerCase()));
  const renderContent=(content)=>{const parts=content.split(/(<@!?\d+>|<@&\d+>|@[\w-]+|#[\w-]+)/g);return parts.map((part,i)=>{if(part.startsWith('<@&')){const r=roles.find(x=>x.id===part.slice(3,-1));return <span className="mention-text" key={i}>@{r?.name||'role'}</span>}if(part.startsWith('<@')){const m=members.find(x=>x.id===part.replace(/\D/g,''));return <span className="mention-text" key={i}>@{m?.name||'user'}</span>}return part[0]==='@'||part[0]==='#'?<span className="mention-text" key={i}>{part}</span>:part})};
  return <div className="app-shell">
